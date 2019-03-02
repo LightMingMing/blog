@@ -1,6 +1,9 @@
 # 微服务-服务消费方实现
 
+[TOC]
+
 ## 示例
+
 ```java
 // 服务发布方
 @Remoting
@@ -30,8 +33,7 @@ public class FooService {
     }
 }
 ```
-想必有使用过铁犀牛微服务的人对以上的程序都会比较熟悉。服务发布方，编写微服务接口(带有`@Remoting`注解的接口)及其实现，
-然后将微服务接口打包发送给服务消费方，服务消费方就能够调用本地接口一样调用微服务接口。
+想必有使用过铁犀牛微服务的人对以上的程序都会比较熟悉。服务发布方，编写微服务接口(带有`@Remoting`注解的接口)及其实现，然后将微服务接口打包发送给服务消费方，服务消费方就能够调用本地接口一样调用微服务接口。
 
 ## 微服务消费方实现
 微服务接口的实现是在服务发布方，而服务消费方没有接口实现，那么为什么`EchoService`在消费方能够注入(`@Autowired`)成功呢?
@@ -50,8 +52,7 @@ public interface BeanFactoryPostProcessor {
     void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException;
 }
 ```
-铁犀牛中通过开发`AnnotationBeanDefinitionRegistryPostProcessor`实现了在容器启动时，通过扫描某类注解(如`@Remoting`、`@JdbcRepository`、`@RestApi`)，
-来为`每一个`有该注解标注的类或接口都生成一个对应的FactoryBean, 并将该FactoryBean注册到容器中。 如示例中，`FooService`中的注入的`EchoService`就是某个FactoryBean所代理的对象
+铁犀牛中通过开发`AnnotationBeanDefinitionRegistryPostProcessor`实现了在容器启动时，通过扫描某类注解(如`@Remoting`、`@JdbcRepository`、`@RestApi`)，来为`每一个`有该注解标注的类或接口都生成一个对应的FactoryBean, 并将该FactoryBean注册到容器中。 如示例中，`FooService`中的注入的`EchoService`就是某个FactoryBean所代理的对象。
 ```java
 package org.ironrhino.core.spring.configuration;
 
@@ -90,7 +91,9 @@ public class RemotingServiceRegistryPostProcessor
 ```
 以上几个类的类图如下：
 
-![RemotingServiceRegistryProcessor](png/RemotingServiceRegistryPostProcessor.png)
+<img src="https://raw.githubusercontent.com/LightMingMing/ironrhino-doc/master/png/HttpInvokerClient.png" width="500"/>
+
+
 
 ### HttpInvokerClient 微服务远程调用
 如果对FactoryBean不是很了解的话，可以看如下示例：
@@ -133,9 +136,12 @@ public class Main {
 ```
 理解上面程序后，会更容易理解`HttpInvokerClient`. `BarServiceImpl`仅仅是代理了`BarService`，而`HttpInvokerClient`更为通用，用于代理任何有`@Remoting`标注的接口
 其类图如下：
-![HttpInvokerClient](png/HttpInvokerClient.png)
+
+<img src="https://raw.githubusercontent.com/LightMingMing/ironrhino-doc/master/png/HttpInvokerClient.png" width="500"/>
+
 可看出`MethodInterceptorFactoryBean`实现了`MethodInterceptor`方法拦截器，示例中消费方调用`echoService`的`echo`方法执行时便会被拦截到。
 其中`invoke`方法做了做了如下事情：
+
 1. 校验所拦截方法的参数，参数不合法时，可减少请求来回
 2. 接口默认方法的话，不需要向服务端发送请求
 3. 特殊方法返回类型的特殊处理，如`Callable`、`Future`、`ListenbleFuture`, 通过开启一个线程向服务端发送请求(调用doInvoke方法)，实现异步支持
@@ -219,6 +225,8 @@ public class HttpInvokerClient extends FallbackSupportMethodInterceptorFactoryBe
 
 接下来要做的就是向该地址发送Http请求，告诉它我要执行你的`echo`方法，并且参数值是`Hello, world!`, 服务端接收信息后通过反射执行该方法，并将返回信息`Hello, world!`发送给消费方。
 而实际上方法名、方法参数都封装到了一个`RemoteInvocation`对象中，而服务端的返回信息以及异常信息封装在`ResultRemoteInvocation`对象中。
+
+
 
 ## 微服务执行流程
 ![执行流程](png/Remoting.jpg)
