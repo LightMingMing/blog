@@ -1,8 +1,10 @@
-# 微服务-服务消费方实现
+# 微服务--服务消费方
 
 [TOC]
 
-## 示例
+## 概述
+
+想必有使用过铁犀牛微服务的同学对以下的程序都会比较熟悉。服务发布方，编写微服务接口(带有`@Remoting`注解的接口)及其实现，然后将微服务接口打包发送给服务消费方，服务消费方就能够像调用本地接口一样调用微服务接口。
 
 ```java
 // 服务发布方
@@ -33,15 +35,20 @@ public class FooService {
     }
 }
 ```
-想必有使用过铁犀牛微服务的人对以上的程序都会比较熟悉。服务发布方，编写微服务接口(带有`@Remoting`注解的接口)及其实现，然后将微服务接口打包发送给服务消费方，服务消费方就能够调用本地接口一样调用微服务接口。
+想必大家或多或少都会有这样一个疑问，微服务接口`EchoService`的实现`EchoServiceImpl`是在服务发布方，而服务消费方没有接口实现，那么为什么该接口能够被成功注入到消费方的组件中呢? 执行微服务接口方法时，消费方做了些什么以及服务发布方又做了些什么？
 
-## 微服务消费方实现
-微服务接口的实现是在服务发布方，而服务消费方没有接口实现，那么为什么`EchoService`在消费方能够注入(`@Autowired`)成功呢?
+这里我们就重点分析下铁犀牛微服务的服务消费方。
 
-铁犀牛则是使用了Spring中的`BeanFactoryPostProcessor`和`FactoryBean`
 
-### Bean工厂后置处理器
-`BeanFactoryPostProcessor`是Spring提供的一种容器扩展机制，能够在实例化Bean对象之前，对注入到容器的Bean进行修改，当然也可以对Bean进行注册。
+
+## 注册微服务接口代理对象
+
+虽然在服务消费方看不到微服务接口的直接实现，但是却能够成功注入到消费方组件中，说明服务消费方的容器中还是存在这样的一个Bean对象的，只是我们没有直接看到而已。
+
+这里铁犀牛使用了Spring框架中的`BeanFactoryPostProcessor`和`FactoryBean`。
+
+`BeanFactoryPostProcessor`是Spring提供的一种容器扩展机制，能够在Spring容器实例化Bean对象之前，对注入到容器的Bean进行修改，当然也可以对Bean进行注册。
+
 ```java
 package org.springframework.beans.factory.config;
 
@@ -52,7 +59,7 @@ public interface BeanFactoryPostProcessor {
     void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException;
 }
 ```
-铁犀牛中通过开发`AnnotationBeanDefinitionRegistryPostProcessor`实现了在容器启动时，通过扫描某类注解(如`@Remoting`、`@JdbcRepository`、`@RestApi`)，来为`每一个`有该注解标注的类或接口都生成一个对应的FactoryBean, 并将该FactoryBean注册到容器中。 如示例中，`FooService`中的注入的`EchoService`就是某个FactoryBean所代理的对象。
+铁犀牛中`AnnotationBeanDefinitionRegistryPostProcessor`通过实现该接口，实现了在容器启动时，通过扫描指定的注解类型(如`@Remoting`、`@JdbcRepository`、`@RestApi`)，来为**每一个**有该注解标注的类或接口都生成一个对应的FactoryBean, 并将该FactoryBean注册到容器中。 如示例中，`FooService`中的注入的`EchoService`就是某个FactoryBean所代理的对象。
 ```java
 package org.ironrhino.core.spring.configuration;
 
@@ -72,7 +79,7 @@ public abstract class AnnotationBeanDefinitionRegistryPostProcessor<A extends An
 ```
 > 注: FactoryBean与BeanFactory的区别, FactoryBean是一个Bean, 而BeanFactory是一个管理Bean的工厂
 
-那么接下来就需要指定是用哪个FactoryBean来代理微服务接口了，如下可以看出`Remoting`接口是由`HttpInvokerClient`代理的
+那么接下来就需要指定是用哪个FactoryBean来代理微服务接口了，如下可以看出铁犀牛中微服务接口是由`HttpInvokerClient`代理的。
 ```java
 package org.ironrhino.core.remoting.client;
 
@@ -89,14 +96,11 @@ public class RemotingServiceRegistryPostProcessor
 	}
 }
 ```
-以上几个类的类图如下：
+以上几个类的关系图如下：
 
-<img src="https://raw.githubusercontent.com/LightMingMing/ironrhino-doc/master/png/HttpInvokerClient.png" width="500"/>
+<img src="https://raw.githubusercontent.com/LightMingMing/ironrhino-doc/master/png/RemotingServiceRegistryPostProcessor.png" width="500"/>
 
-
-
-### HttpInvokerClient 微服务远程调用
-如果对FactoryBean不是很了解的话，可以看如下示例：
+如果对`FactoryBean`不是很熟悉的话，可以看如下示例：
 ```java
 public interface BarService {
     String hello(String message);
@@ -134,21 +138,21 @@ public class Main {
     // 注：这里barService和barServiceImpl是不一样的，barService == barServiceImpl.getObject()
 }
 ```
-理解上面程序后，会更容易理解`HttpInvokerClient`. `BarServiceImpl`仅仅是代理了`BarService`，而`HttpInvokerClient`更为通用，用于代理任何有`@Remoting`标注的接口
-其类图如下：
+
+
+到此我们大概能够知道，在服务消费方容器启动时，`RemotingServiceRegistryPostProcessor`扫描微服务接口，每扫描到一个则向容器中注入一个代理该微服务接口`HttpInvokerClient`。
+
+
+
+## HttpInvokerClient
+
+在`FactoryBean`的示例中`BarServiceImpl`仅仅是代理了`BarService`，而`HttpInvokerClient`更为通用，能够代理任何有`@Remoting`标注的接口。
+其类关系图如下：
 
 <img src="https://raw.githubusercontent.com/LightMingMing/ironrhino-doc/master/png/HttpInvokerClient.png" width="500"/>
 
-可看出`MethodInterceptorFactoryBean`实现了`MethodInterceptor`方法拦截器，示例中消费方调用`echoService`的`echo`方法执行时便会被拦截到。
-其中`invoke`方法做了做了如下事情：
+可看出`MethodInterceptorFactoryBean`实现了`MethodInterceptor`方法拦截器，其伪代码如下：
 
-1. 校验所拦截方法的参数，参数不合法时，可减少请求来回
-2. 接口默认方法的话，不需要向服务端发送请求
-3. 特殊方法返回类型的特殊处理，如`Callable`、`Future`、`ListenbleFuture`, 通过开启一个线程向服务端发送请求(调用doInvoke方法)，实现异步支持
-4. 调用doInvoke方法
-5. 返回结果校验
-
-doInvoke是一个抽象方法，用于远程服务调用
 ```java
 package org.ironrhino.core.spring;
 
@@ -172,7 +176,18 @@ public abstract class MethodInterceptorFactoryBean implements MethodInterceptor,
 }
 ```
 
-接下来是`FallbackSupportMethodInterceptorFactoryBean`, 用于在远程调用失败后，调用本地的实现，逼格高点的说法叫服务降级
+其中`invoke`方法做了如下事情：
+
+1. 校验所拦截方法的参数，参数不合法时，可减少请求来回；
+2. 如果方法为接口默认方法的话，则不需要向服务发布方发送调用请求；
+3. 特殊方法返回类型的处理，如`Callable`、`Future`、`ListenbleFuture`, 通过在一个线程中向服务端发送请求(调用doInvoke方法)，来实现异步支持；
+4. 调用doInvoke方法；
+5. 返回结果的校验。
+
+doInvoke是一个抽象方法，其具体的实现交给了`MethodInterceptorFactoryBean`子类去完成。
+
+接下来是`FallbackSupportMethodInterceptorFactoryBean`, 用于在远程调用失败后，调用本地的实现(由@Fallback注解标注)，逼格高点的说法叫服务降级。
+
 ```java
 package org.ironrhino.core.spring;
 public abstract class FallbackSupportMethodInterceptorFactoryBean extends MethodInterceptorFactoryBean {
@@ -198,7 +213,7 @@ public abstract class FallbackSupportMethodInterceptorFactoryBean extends Method
 
 }
 ```
-最后就是远程微服务接口的客户端的真正实现了 `HttpInvokerClient`
+最后则是 `HttpInvokerClient`了
 ```java
 package org.ironrhino.core.remoting.client;
 
@@ -220,13 +235,15 @@ public class HttpInvokerClient extends FallbackSupportMethodInterceptorFactoryBe
     }
 }
 ```
-在服务消费方，服务注册中心用于发现服务，根据远程微服务接口的全限类型名，如`com.demo.service.EchoService`，来获取服务发布方的服务IP及端口
-拼装`serviceUrl`,如`http://162.16.4.8:8080/remoting/httpinvoker/com.demo.EchoService`
+这里`doInvoke`方法主要做了一下如下事情：
 
-接下来要做的就是向该地址发送Http请求，告诉它我要执行你的`echo`方法，并且参数值是`Hello, world!`, 服务端接收信息后通过反射执行该方法，并将返回信息`Hello, world!`发送给消费方。
-而实际上方法名、方法参数都封装到了一个`RemoteInvocation`对象中，而服务端的返回信息以及异常信息封装在`ResultRemoteInvocation`对象中。
+1. 获取服务发布方的地址。在服务消费方，服务注册中心用于发现服务，根据微服务接口的全限类型名，如`com.demo.service.EchoService`，来获取服务发布方的服务IP及端口；
+   拼服务地址`serviceUrl`,如`http://162.16.4.8:8080/remoting/httpinvoker/com.demo.EchoService`
 
+2. 将拦截到的方法信息以及方法参数信息封装到一个`RemotingInvocation`中，并序列化该对象，写入到请求的输入流中；
+3. 发送HTTP请求；
+4. 将响应输出流中的信息反序列化为`RemotingInvocationResult`对象，并从该对象中获取远程方法调用的结果。
 
+## 执行流程
 
-## 微服务执行流程
 ![执行流程](png/Remoting.jpg)
