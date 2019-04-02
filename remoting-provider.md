@@ -12,10 +12,9 @@
 
 1. 微服务接口方法拦截
 2. 将方法签名和方法参数值封装到`RemotingInvocation`中
-3. **序列化**`RemotingInvocation`到请求的输入流中
-4. 发送http请求, 其中请求地址格式为 `http://ip:port/remoting/httpinvoker/${interaceName}`
-5. 将响应的输出流中的数据**反序列化**为`RemotingInvocationResult`
-6. 其中`RemotingInvocationResult`封装的便是远程调用的结果
+3. 建立http请求连接, **序列化**`RemotingInvocation`到连接的输出流中，其中请求地址格式为 `http://ip:port/remoting/httpinvoker/${interaceName}`
+4. 将响应的输出流中的数据**反序列化**为`RemotingInvocationResult`
+5. 其中`RemotingInvocationResult`封装的便是远程调用的结果
 
 据此，我们大致可以猜测出微服务的服务发布方的处理流程：
 
@@ -43,7 +42,7 @@ public class RemotingServerInitializer implements WebApplicationInitializer {
 	@Override
 	public void onStartup(ServletContext servletContext) throws ServletException {
 		String servletName = HttpInvokerServer.class.getName();
-    // 注册配置类
+    // 注册组件
 		AnnotationConfigWebApplicationContext ctx = new AnnotationConfigWebApplicationContext();
 		ctx.setId(servletName);
 		ctx.register(RemotingServerConfiguration.class);
@@ -62,77 +61,137 @@ public class RemotingServerInitializer implements WebApplicationInitializer {
 
 ![DispatcherServlet](png/InheritedDispatcherServlet.png)
 
-### 请求处理器注册
+### Servlet初始化
 
-`InheritedDispatcherServlet`注册时，容器中注册了`RemotingServerConfiguration`这样的一个配置类，如下：
+在`servlet`的生命周期中，`init`方法仅仅会调用一次，在`servlet`销毁时，会调用`destory`方法。
+
+```java
+package javax.servlet;
+
+public interface Servlet {
+    // 初始化
+	void init(ServletConfig var1) throws ServletException;
+    // 销毁
+	void destroy();
+}
+```
+
+在`DispatchServlet`的初始化过程中, 默认会从`DispatcherServlet.properties`中读取并初始化一个`HandlerMapping`集合和一个`HandlerApapters`集合。其中`HandlerMapping`用于处理器的映射，即根据请求的url来映射到相关的处理器，以此来实现请求的分发`dispatch`，`HandlerAdapter`是处理器的适配器，用来请求的处理。
+
+```java
+package org.springframework.web.servlet;
+
+public class DispatcherServlet extends FrameworkServlet {
+	
+    @Nullable
+	private List<HandlerMapping> handlerMappings;
+	@Nullable
+	private List<HandlerAdapter> handlerAdapters;
+    
+	@Override
+	protected void onRefresh(ApplicationContext context) {
+		initStrategies(context);
+	}
+
+	protected void initStrategies(ApplicationContext context) {
+        // 初始化HandlerMappings
+		initHandlerMappings(context);
+        // 初始化HandlerAdatpers
+		initHandlerAdapters(context);
+	}
+}
+```
+
+如下是DispatcherServlet.properties配置文件
+
+```properties
+# DispatcherServlet.properties
+org.springframework.web.servlet.HandlerMapping=org.springframework.web.servlet.handler.BeanNameUrlHandlerMapping,\
+	org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+
+org.springframework.web.servlet.HandlerAdapter=org.springframework.web.servlet.mvc.HttpRequestHandlerAdapter,\
+	org.springframework.web.servlet.mvc.SimpleControllerHandlerAdapter,\
+	org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter
+```
+
+这里2类HandlerMapping，`BeanNameUrlHandlerMapping`用于根据bean的名称来根据进行映射，在`RemotingServerConfiguration`类中，定义了一个beanName为`/httpinvoker/*`的组件，那么`/remoting/httpinvoker/*`格式的请求便会被`HttpInvokerServer`这个处理器去处理。`RequestMappingHandlerMapping`则用于控制器(`@Controller`、`@RequestMapping`)的映射。
 
 ```java
 package org.ironrhino.core.remoting.server;
 
 public class RemotingServerConfiguration {
-
 	@Bean(name = "/httpinvoker/*")
 	public HttpInvokerServer httpInvokerServer() {
 		return new HttpInvokerServer();
 	}
-
 }
 ```
 
-`HttpInvokerServer`实现了Spring MVC提供的请求处理器接口`HttpRequestHandler`
-
-```java
-package org.ironrhino.core.remoting.server;
-
-public class HttpInvokerServer implements HttpRequestHandler {
-}
-```
-
-
-
-
-
-## 请求处理阶段
-
-### 请求映射
+`BeanNameUrlHandlerMapping`和`RequestMappingHandlerMapping`类图如下:
 
 ![](png/HandlerMapping.png)
 
-### 请求处理
+至此，我们大概知道了微服务调用的HTTP请求，会被`DispathcerServlet`分发给`HttpInvokerServer`来处理，接下来我们就具体看下HttpInvokerServer的处理流程。
+
+## 请求处理
+
+HttpInvokerServer的伪代码如下：
 
 ```java
 package org.ironrhino.core.remoting.server;
 public class HttpInvokerServer implements HttpRequestHandler {
-
-  @Autowired
-	private ServiceRegistry serviceRegistry;
-
-  @Override
-	public void handleRequest(HttpServletRequest request, HttpServletResponse response)
-			throws ServletException, IOException {
     
-  }
+    @Autowired
+	private ServiceRegistry serviceRegistry;
+    
+    @Override
+    public void handleRequest(HttpServletRequest request, HttpServletResponse response) 		throws ServletException, IOException {
+        // 略
+    }
 }
 ```
 
-```java
-// 获取微服务接口名
-String uri = request.getRequestURI();
-String interfaceName = uri.substring(uri.lastIndexOf('/') + 1);
-// 从Request请求头中获取序列化类型
-HttpInvokerSerializer serializer = HttpInvokerSerializers.forRequest(req);
-// 反序列化RemoteInvocation
-RemoteInvocation invocation = serializer.readRemoteInvocation(
-			ClassUtils.forName(interfaceName, null),
-			req.getInputStream());
-// 从注册中心获取接口的具体实现
-Object target = serviceRegistry.getExportedServices().get(interfaceName);
-// 反射执行
-Object value = invocation.invoke(target); /
-// 结果封装到RemotingInvocationResult
-RemoteInvocationResult result = new RemoteInvocationResult(value);
-// 序列化到response的输出流中
-serializer.writeRemoteInvocationResult(invocation, result, response.getOutputStream());
-```
+这里handlerRequest主要流程如下：
 
-## 总结
+1. 获取接口名，以及从服务注册中心获取接口的具体实现
+
+   ```java
+   String uri = request.getRequestURI();
+   // 接口名
+   String interfaceName = uri.substring(uri.lastIndexOf('/') + 1);
+   // 接口具体实现
+   Object target = serviceRegistry.getExportedServices().get(interfaceName);
+   ```
+
+2. 从请求头中获取序列化方式
+
+   ```java
+   // 获取序列化方式
+   HttpInvokerSerializer serializer = HttpInvokerSerializers.forRequest(req);
+   ```
+
+3. 请求的输入流中的数据反序列化为RemotingInvocation
+
+   ```java
+   // 反序列化
+   RemoteInvocation invocation = serializer.readRemoteInvocation(
+   			ClassUtils.forName(interfaceName, null),
+   			req.getInputStream());
+   ```
+
+4. 反射执行
+
+   ```java
+   // 反射执行
+   Object value = invocation.invoke(target); 
+   ```
+
+5. 封装执行结果，并序列化到响应的输出流中
+
+   ```java
+   // 结果封装到RemotingInvocationResult
+   RemoteInvocationResult result = new RemoteInvocationResult(value);
+   // 序列化到response的输出流中
+   serializer.writeRemoteInvocationResult(invocation, result, response.getOutputStream());
+   ```
+
