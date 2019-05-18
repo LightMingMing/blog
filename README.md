@@ -8,4 +8,4 @@
 
 ## Java并发
 
-* [ ] [深入学习Java线程池及源码分析](/concurrency/ThreadPoolExecutor.md)
+* [ ] [深入学习Java线程池及源码分析](/concurrent/ThreadPoolExecutor.md)
