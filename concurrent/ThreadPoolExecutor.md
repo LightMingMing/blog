@@ -1,5 +1,27 @@
 # 深入学习Java线程池及源码分析
 
+- [核心参数](#核心参数)  
+  - [corePoolSize](#corePoolSize)  
+  - [workQueue](#workQueue)  
+  - [maximunPoolSize](#maximunPoolSize)  
+  - [keepAliveTime && unit](#keepAliveTime--unit)  
+  - [rejectedExecutionHandler](#rejectedExecutionHandler)  
+  - [ ] [参数动态配置](#参数动态配置)  
+- [Executors介绍](#Executors介绍)  
+- [线程池生命周期](#线程池生命周期)  
+  - [运行状态](#运行状态)  
+  - [生命周期方法](#生命周期方法)  
+    - [shutdown()方法](#shutdown-方法)  
+    - [shutdownNow()方法](#shutdownNow-方法)  
+- [worker线程的生命周期(划重点)](#worker线程的生命周期划重点)  
+  - [任务提交](#任务提交)  
+  - [worker线程](#worker线程)  
+  - [ ] [worker线程创建](#worker线程创建)  
+  - [ ] [worker线程执行](#worker线程执行)  
+  - [空闲worker线程退出](#空闲worker线程退出)  
+    - [ ] [主动退出](#主动退出)  
+    - [被动中断退出](#被动中断退出)  
+
 ## 核心参数
 `ThreadPoolExecutor`线程池构造函数如下:
 ```java
@@ -72,7 +94,7 @@ public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
 ```
 虽说名字听起来有点高大上, 但是从代码上看起来还是很容易理解的
 
-## 线程池运行时参数的动态配置 TODO
+### 参数动态配置
 
 ## Executors介绍
 熟悉线程池几个核心的参数后, 现在来看Executors创建线程池的几个静态方法, 会更容易理解.
@@ -284,9 +306,9 @@ private final class Worker
 }
 ```
 
-### work线程创建
+### worker线程创建
 
-### work线程执行
+### worker线程执行
 ```java
 final void runWorker(Worker w) {
     Thread wt = Thread.currentThread();
