@@ -217,4 +217,164 @@ public List<Runnable> shutdownNow() {
 3. 执行drainQueue方法, 将任务队列中的任务全部移出, 并返回
 4. 尝试终止, 此时工作队列已经为空了, 需要判断是否还有运行中的任务
 
-## 任务提交与work线程的创建(划重点) TODO
+
+## worker线程的生命周期(划重点)
+### 任务提交
+代码如下
+```java
+public void execute(Runnable command) {
+    if (command == null)
+        throw new NullPointerException();
+    int c = ctl.get();
+    // step1: 工作线程数量 < corePoolSize
+    if (workerCountOf(c) < corePoolSize) {
+        if (addWorker(command, true))
+            return;
+        c = ctl.get();
+    }
+    // stpe2: 工作线程数量 >= corePoolSize
+    if (isRunning(c) && workQueue.offer(command)) {
+        int recheck = ctl.get();
+        if (! isRunning(recheck) && remove(command))
+            reject(command);
+        else if (workerCountOf(recheck) == 0) 
+            addWorker(null, false);
+    }
+    // step3: workQueue is full
+    else if (!addWorker(command, false))
+        reject(command);
+}
+```
+command指的是提交的任务, 这里有3个过程:
+1. 如果工作线程数量小于核心线程数量, 则调用`addWorker(command, true)`方法创建一个worker线程去处理任务, 参数true表示创建的线程是核心线程. 
+2. 到达这一步, 说明线程池线程大小>=核心线程数. 如果线程是running状态, 并且任务添加至队列成功(队列满了, 则添加失败执行第3步), 这时会重新检查线程状态, 重新检查主要是考虑到在上次检查后发生以下情况
+  1. 线程池被shutdown()、shutdownNow(), 这时将该任务从队列中删除, 删除成功后则拒绝, 也有可能删除失败比如执行了shutdownNow()方法导致队列已经为空了
+  2. 当前没有工作线程(上次检查后, 存在worker线程退出), 添加一个firstTask=null的工作线程, 它会从对列中拉取任务并执行
+3. 到达这一步表明任务队列是满的状态, 这时会创建核心线程之外的线程, 如果线程创建失败(达到最大线程数量maximum), 将任务拒绝
+
+### worker线程
+Worker是线程池私有的一个内部类, 继承于`AbstractQueuedSynchronizer`(AQS, 同步器, Java中一些标准同步器都是在它基础上实现的, 如`ReentrantLock`可重入锁、`ReadWriteLock`读写锁, `CountDownLatch`闭锁), worker定制了一些基于`AQS`实现的方法如`lock()`、`tryLock()`、`unlock()`,  来实现[空闲线程中断退出](#被动中断退出)(shutdown()方法中会执行该过程), 保证不中断正在工作线程, 只中断空闲的线程.
+```java
+private final class Worker
+    extends AbstractQueuedSynchronizer
+    implements Runnable 
+{
+    final Thread thread;
+    /** Initial task to run.  Possibly null. */
+    Runnable firstTask;
+    /** Per-thread task counter */
+    volatile long completedTasks;
+
+    Worker(Runnable firstTask) {
+        setState(-1); // inhibit(禁止) interrupts until runWorker
+        this.firstTask = firstTask;
+        this.thread = getThreadFactory().newThread(this);
+    }
+
+    public void run() {
+        runWorker(this);
+    }
+
+    protected boolean tryAcquire(int unused) {...}
+    protected boolean tryRelease(int unused) {...}
+
+    public void lock()        { acquire(1); }
+    public boolean tryLock()  { return tryAcquire(1); }
+    public void unlock()      { release(1); }
+}
+```
+
+### work线程创建
+
+### work线程执行
+```java
+final void runWorker(Worker w) {
+    Thread wt = Thread.currentThread();
+    Runnable task = w.firstTask;
+    w.firstTask = null;
+    w.unlock(); // allow interrupts
+    boolean completedAbruptly = true;
+    try {
+        while (task != null || (task = getTask()) != null) {
+            w.lock();
+            if ((runStateAtLeast(ctl.get(), STOP) ||
+                 (Thread.interrupted() &&
+                  runStateAtLeast(ctl.get(), STOP))) &&
+                !wt.isInterrupted())
+                wt.interrupt();
+            try {
+                beforeExecute(wt, task);
+                try {
+                    task.run();
+                    afterExecute(task, null);
+                } catch (Throwable ex) {
+                    afterExecute(task, ex);
+                    throw ex;
+                }
+            } finally {
+                task = null;
+                w.completedTasks++;
+                w.unlock();
+            }
+        }
+        completedAbruptly = false;
+    } finally {
+        processWorkerExit(w, completedAbruptly);
+    }
+}
+                
+```
+
+这段代码有点难理解, 把线程中断相关的3个方法都用上了...
+```java
+if ((runStateAtLeast(ctl.get(), STOP) ||
+     (Thread.interrupted() &&
+      runStateAtLeast(ctl.get(), STOP))) &&
+    !wt.isInterrupted())
+    wt.interrupt();
+```
+1. 如果线程池是stop状态, 并且当前没有被中断(`isInterrupted`), 则将当前线程中断, 也就是确保线程是中断状态
+2. 如果线程池不是stop状态, 则检查线程是否中断, 如果是中断的则**清除**中断标记, 再此判断是不是stop状态(即判断线程中断是不是因为shutdownNow()引起的), 是的话, 如果线程没有中断标记的话, 则进行中断
+
+worker工作线程在`getTask()`获取任务后, 在w.lock()前, 如果发生了shutdown()操作, 这时候中断空闲线程`interruptedIdleWorkers`方法中的`w.tryLock()`是可以获取许可的, 这样worker线程就会有一个中断标记, 因此这段代码的作用是为了**清除误中断活跃worker线程的中断标记**.
+
+### 空闲worker线程退出
+
+#### 主动退出
+
+#### 被动中断退出
+如下是空闲线程中断的源代码
+```java
+private void interruptIdleWorkers(boolean onlyOne) {
+    final ReentrantLock mainLock = this.mainLock;
+    mainLock.lock();
+    try {
+        for (Worker w : workers) {
+            Thread t = w.thread;
+            if (!t.isInterrupted() && w.tryLock()) {
+                try {
+                    t.interrupt();
+                } catch (SecurityException ignore) {
+                } finally {
+                    w.unlock();
+                }
+            }
+            if (onlyOne)
+                break;
+        }
+    } finally {
+        mainLock.unlock();
+    }
+}
+```
+从中可知`w.tryLock()`成功, 才会进行线程的中断. 并且Worker初始化时, setState(-1) 旁有这样的一个注释, 禁止线程中断直到runWorker
+```java
+Worker(Runnable firstTask) {
+    setState(-1); // inhibit(禁止) interrupts until runWorker
+    // ...
+}
+```
+从`runWorker(Worker w)`方法中可以知道, 空闲等待任务的worker线程是没有获取许可的(即没有执行w.lock()方法), 则可以被调用shutdown()方法的主线程中断. 而那些拿到任务准备工作的worker线程都会获取一个许可, 而主线程中执行w.tryLock()则会返回false, 因此活跃状态的线程不会被中断. 
+
+
+
