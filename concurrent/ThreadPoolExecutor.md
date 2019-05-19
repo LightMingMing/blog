@@ -72,6 +72,8 @@ public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
 ```
 虽说名字听起来有点高大上, 但是从代码上看起来还是很容易理解的
 
+## 线程池运行时参数的动态配置 TODO
+
 ## Executors介绍
 熟悉线程池几个核心的参数后, 现在来看Executors创建线程池的几个静态方法, 会更容易理解.
 ### newFixedThreadPool 固定大小的线程池
@@ -111,13 +113,108 @@ public static ExecutorService newSingleThreadExecutor() {
                                 new LinkedBlockingQueue<Runnable>()));
 ```
 
-## 线程池状态
+## 线程池生命周期
+### 运行状态
 线程池有以下5个状态
 1. RUNNING 能够接收新任务和处理队列中的任务
 2. SHUTDOWN 线程池不接收新任务, 但是会处理队列中的任务
 3. STOP 不接受新任务, 也不会处理队列中的任务, 并且会中断处理中的任务
-4. TIDYING 所有的任务都已结束, 并且工作线程数量为0, 到该状态后, 会运行terminated()钩子方法
+4. TIDYING 所有的任务都已结束, 并且工作线程数量为0, 到该状态后, 会执行行terminated()钩子方法
 5. TERMINATED terminated()完成后
 
-状态转化图如下:
+如下为线程池状态转化的有向无环图(DGA):
 ![线程池状态](png/tpe_state.png)
+
+线程池使用了一个`AtomictInteger` ctl(control)来同时表示线程池运行状态以及worker线程数量. 其中Integer类型的高3位表示状态(5个状态, 至少需要3位来表示), 低29位表示工作线程数量(也就是工作线程数量最大为(2^29)-1, 目前肯定是够用的, 即使将来不够用了, 改为AtomicLong也很容易).
+```java
+private final AtomicInteger ctl = new AtomicInteger(ctlOf(RUNNING, 0));
+private static final int COUNT_BITS = Integer.SIZE - 3; // 29
+// 计数掩码
+private static final int COUNT_MASK = (1 << COUNT_BITS) - 1; // 0b000111......1
+
+// runState is stored in the high-order bits
+// 0b111...111 << 29 = 0b111000...000
+private static final int RUNNING    = -1 << COUNT_BITS;
+//           0 << 29 = 0b000000...000
+private static final int SHUTDOWN   =  0 << COUNT_BITS;
+//           1 << 29 = 0b001000...000
+private static final int STOP       =  1 << COUNT_BITS;
+//           2 << 29 = 0b010000...000
+private static final int TIDYING    =  2 << COUNT_BITS;
+//           3 << 29 = 0b11000...000
+private static final int TERMINATED =  3 << COUNT_BITS;
+
+// Packing and unpacking ctl
+private static int runStateOf(int c)     { return c & ~COUNT_MASK; }
+private static int workerCountOf(int c)  { return c & COUNT_MASK; }
+private static int ctlOf(int rs, int wc) { return rs | wc; }
+```
+`ctl`初始值为`0b111000...000`, 即为运行状态并且当前无工作线程.
+
+**关于掩码**
+> 掩码(mask) 在计算机学科及数字逻辑中指的是一串二进制数字，通过与目标数字的按位操作，达到屏蔽指定位而实现需求.
+这里则使用了2个掩码
+1. 计数掩码(高3位均为0, 低29位均为1)和ctl进行(`&`)与操作进行计数, 见`runStateOf(int c)`方法
+2. 状态掩码(计数掩码求反, 高3位均为1, 低29位均为0)与ctl进行与操作获取线程池当前状态, 见`workerCountOf(int c)`方法
+
+### 生命周期方法
+```java
+package java.util.concurrent;
+public interface ExecutorService extends Executor {
+    // 不接收新任务, 但是会处理队列中的任务 -> shutdown状态
+    void shutdown();
+    // 不接收新任务, 也不会处理队列中任务, 并且将队列中没处理的任务返回 -> stop状态
+    List<Runnable> shutdownNow();
+    // 是否为shutdown状态
+    boolean isSutdown();
+    // 是否为terminated状态
+    boolean isTerminated();
+    // 等待线程变为terminated状态
+    boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException;
+}
+```
+#### shutdown() 方法
+```java
+public void shutdown() {
+    final ReentrantLock mainLock = this.mainLock;
+    mainLock.lock();
+    try {
+        checkShutdownAccess();
+        advanceRunState(SHUTDOWN);
+        interruptIdleWorkers();
+        onShutdown(); // hook for ScheduledThreadPoolExecutor
+    } finally {
+        mainLock.unlock();
+    }
+    tryTerminate();
+}
+```
+1. 将线程池运行状态修改为`shutdown`
+2. 中断**空闲**线程, 空闲线程指的是工作队列workQueue为Empty
+3. 执行onShutdown()钩子方法
+4. 尝试终止, 对线程池状态进行判断, 如果满足terminate条件(无工作线程、队列为空、执行完terminated钩子方法), 则状态修改为terminated
+
+#### shutdownNow() 方法
+```java
+public List<Runnable> shutdownNow() {
+    List<Runnable> tasks;
+    final ReentrantLock mainLock = this.mainLock;
+    mainLock.lock();
+    try {
+        checkShutdownAccess();
+        advanceRunState(STOP);
+        interruptWorkers();
+        tasks = drainQueue();
+    } finally {
+        mainLock.unlock();
+    }
+    tryTerminate();
+    return tasks;
+}
+```
+1. 将线程池运行状态修改为`stop`
+2. 中断所有**工作**线程(正在执行任务的线程、当前没任务可做的空闲线程)
+3. 执行drainQueue方法, 将任务队列中的任务全部移出, 并返回
+4. 尝试终止, 此时工作队列已经为空了, 需要判断是否还有运行中的任务
+
+## 任务提交与work线程的创建(划重点) TODO
