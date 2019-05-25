@@ -6,7 +6,7 @@
   - [maximunPoolSize](#maximunPoolSize)  
   - [keepAliveTime && unit](#keepAliveTime--unit)  
   - [rejectedExecutionHandler](#rejectedExecutionHandler)  
-  - [ ] [参数动态配置](#参数动态配置)  
+  - [参数动态配置](#参数动态配置)  
 - [Executors介绍](#Executors介绍)  
 - [线程池生命周期](#线程池生命周期)  
   - [运行状态](#运行状态)  
@@ -97,6 +97,59 @@ public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
 虽说名字听起来有点高大上, 但是从代码上看起来还是很容易理解的
 
 ### 参数动态配置
+1. 预先启动所有核心线程
+```java
+public int prestartAllCoreThreads() {
+    int n = 0;
+    while (addWorker(null, true))
+        ++n;
+    return n;
+}
+```
+2. 允许核心线程超时
+```java
+public void allowCoreThreadTimeOut(boolean value) {
+    if (value && keepAliveTime <= 0)
+        throw new IllegalArgumentException("Core threads must have nonzero keep alive times");
+    if (value != allowCoreThreadTimeOut) {
+        allowCoreThreadTimeOut = value;
+        if (value)
+            interruptIdleWorkers();
+    }
+}
+```
+3. 修改最大线程数量
+```java
+public void setMaximumPoolSize(int maximumPoolSize) {
+    if (maximumPoolSize <= 0 || maximumPoolSize < corePoolSize)
+        throw new IllegalArgumentException();
+    this.maximumPoolSize = maximumPoolSize;
+    if (workerCountOf(ctl.get()) > maximumPoolSize)
+        interruptIdleWorkers();
+}
+```
+4. 修改线程空闲时间
+```java
+public void setKeepAliveTime(long time, TimeUnit unit) {
+    if (time < 0)
+        throw new IllegalArgumentException();
+    if (time == 0 && allowsCoreThreadTimeOut())
+        throw new IllegalArgumentException("Core threads must have nonzero keep alive times");
+    long keepAliveTime = unit.toNanos(time);
+    long delta = keepAliveTime - this.keepAliveTime;
+    this.keepAliveTime = keepAliveTime;
+    if (delta < 0)
+        interruptIdleWorkers();
+}
+```
+5. 修改拒绝策略
+```java
+public void setRejectedExecutionHandler(RejectedExecutionHandler handler) {
+    if (handler == null)
+        throw new NullPointerException();
+    this.handler = handler;
+}
+```
 
 ## Executors介绍
 熟悉线程池几个核心的参数后, 现在来看Executors创建线程池的几个静态方法, 会更容易理解.
