@@ -16,7 +16,7 @@
 - [worker线程的生命周期(划重点)](#worker线程的生命周期划重点)  
   - [任务提交](#任务提交)  
   - [worker线程](#worker线程)  
-  - [ ] [worker线程创建](#worker线程创建)  
+  - [worker线程创建](#worker线程创建)  
   - [worker线程执行](#worker线程执行) 
   - [任务获取](#任务获取) 
   - [worker线程退出](#worker线程退出)  
@@ -309,6 +309,93 @@ private final class Worker
 ```
 
 ### worker线程创建
+在任务提交时，会调用`boolean addWorker(firstTask, core)`方法来创建work工作线程, 返回`true`表示创建成功.
+```java
+private boolean addWorker(Runnable firstTask, boolean core) {
+    retry:
+    for (;;) {
+        int c = ctl.get();
+        int rs = runStateOf(c);
+
+        // Check if queue empty only if necessary.
+        if (rs >= SHUTDOWN &&
+            ! (rs == SHUTDOWN &&
+               firstTask == null &&
+               ! workQueue.isEmpty()))
+            return false;
+
+        for (;;) {
+            int wc = workerCountOf(c);
+            if (wc >= CAPACITY ||
+                wc >= (core ? corePoolSize : maximumPoolSize))
+                return false;
+            if (compareAndIncrementWorkerCount(c))
+                break retry;
+            c = ctl.get();  // Re-read ctl
+            if (runStateOf(c) != rs)
+                continue retry;
+            // else CAS failed due to workerCount change; retry inner loop
+        }
+    }
+
+    boolean workerStarted = false;
+    boolean workerAdded = false;
+    Worker w = null;
+    try {
+        w = new Worker(firstTask);
+        final Thread t = w.thread;
+        if (t != null) {
+            final ReentrantLock mainLock = this.mainLock;
+            mainLock.lock();
+            try {
+                // Recheck while holding lock.
+                // Back out on ThreadFactory failure or if
+                // shut down before lock acquired.
+                int rs = runStateOf(ctl.get());
+
+                if (rs < SHUTDOWN ||
+                    (rs == SHUTDOWN && firstTask == null)) {
+                    if (t.isAlive()) // precheck that t is startable
+                        throw new IllegalThreadStateException();
+                    workers.add(w);
+                    int s = workers.size();
+                    if (s > largestPoolSize)
+                        largestPoolSize = s;
+                    workerAdded = true;
+                }
+            } finally {
+                mainLock.unlock();
+            }
+            if (workerAdded) {
+                t.start();
+                workerStarted = true;
+            }
+        }
+    } finally {
+        if (! workerStarted)
+            addWorkerFailed(w);
+    }
+    return workerStarted;
+}
+```
+这段代码的前段部分, 采用for循环+CAS操作，来保证工作线程数量的原子性.
+后段部分则是创建worker对象这一实例, 并再次判断线程池状态, 是运行态或者shutdown状态但是firstTask不是空时, 则将worker添加对worers工作线程集合中, 之后调用t.start()方法来启动worker线程.
+
+如果worker线程启动失败, 会将woker从wokers集合中移出, 并更新工作线程数量
+```java
+private void addWorkerFailed(Worker w) {
+    final ReentrantLock mainLock = this.mainLock;
+    mainLock.lock();
+    try {
+        if (w != null)
+            workers.remove(w);
+        decrementWorkerCount();
+        tryTerminate();
+    } finally {
+        mainLock.unlock();
+    }
+}
+```
 
 ### worker线程执行
 ```java
