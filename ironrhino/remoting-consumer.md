@@ -98,7 +98,7 @@ public class RemotingServiceRegistryPostProcessor
 ```
 以上几个类的关系图如下：
 
-<img src="https://raw.githubusercontent.com/LightMingMing/ironrhino-doc/master/png/RemotingServiceRegistryPostProcessor.png" width="500"/>
+<img src="png/RemotingServiceRegistryPostProcessor.png" width="500"/>
 
 如果对`FactoryBean`不是很熟悉的话，可以看如下示例：
 ```java
@@ -149,7 +149,7 @@ public class Main {
 在`FactoryBean`的示例中`BarServiceImpl`仅仅是代理了`BarService`，而`HttpInvokerClient`更为通用，能够代理任何有`@Remoting`标注的接口。
 其类关系图如下：
 
-<img src="https://raw.githubusercontent.com/LightMingMing/ironrhino-doc/master/png/HttpInvokerClient.png" width="500"/>
+<img src="png/HttpInvokerClient.png" width="500"/>
 
 可看出`MethodInterceptorFactoryBean`实现了`MethodInterceptor`方法拦截器，其伪代码如下：
 

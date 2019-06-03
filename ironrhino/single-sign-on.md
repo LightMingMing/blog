@@ -101,11 +101,11 @@ globalCookie=true
 
 浏览器中输入http://app.hncy58.internal:8080，发现可页面跳转到http://portal.hncy58.internal:8080/login?targetUrl=http%3A%2F%2Fapp.hncy58.internal%3A8080%2F 证明环境搭建成功
 
-![](/png/sso-login.png)
+![](png/sso-login.png)
 
 登录后观察cookie, 如下可看到cookie的域为.hncy58.internal
 
-![](/png/sso-cookie.png)
+![](png/sso-cookie.png)
 
 注意事项：如果有设置代理的话，需要关闭代理
 
