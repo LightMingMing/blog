@@ -1,4 +1,4 @@
-# 位操作
+# 神奇的位操作
 
 **异或**
 ```java
@@ -10,8 +10,8 @@ val ^ val = 0 两个相同的数异或为0
 
 **是否为2的次方数**
 ```java
-boolean isPowerOfTwo(int val) {
-    return val >= 0 && (val & -val) == val;
+boolean isPowerOfTwo(int i) {
+    return i >= 0 && (i & -i) == i;
 }
 
 // 0b00000001 00000000 00000000 00000000
@@ -19,6 +19,12 @@ boolean isPowerOfTwo(int val) {
 // 0b11111111 00000000 00000000 00000000
 // 0b00000001 00000000 00000000 00000000
 ```
+> 理解: **i & -i计算出来的是能被i整除的最大的2的次方数**, 因此如果i是2的次方数的话, 那么`i & -i == i`为`true`.  
+
+> 扩展: **如果 (i & -i) == 2 ^ x 为真, 那么x是i的二进制数中最先为1的最低位的位置.**  
+    100 = 64 + 32 + 4, 100 & -100 = 4  
+    50  = 32 + 16 + 2,  50 & -50  = 2  
+    48  = 32 + 16,      48 & -48  = 16
 
 **2的次方数的取模**
 ```java
@@ -39,8 +45,8 @@ T next() {
 
 **是否为4(2的次方数)的倍数**
 ```java
-boolean isMultipleOfFour(int val) {
-    return (val & 4 - 1) == 0; // val & 3 == 0
+boolean isMultipleOfFour(int i) {
+    return (i & 4 - 1) == 0; // i & 3 == 0
 }
 ```
 > JDK java.time.Year中闰年的判断
