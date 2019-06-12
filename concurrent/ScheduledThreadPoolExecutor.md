@@ -43,7 +43,7 @@ public class ScheduledThreadPoolExecutor
 }
 ```
 ## 调度任务
-由于任务调度池所执行的任务是一种特殊的任务, 因此任务调度线程池中使用`ScheduledFutureTask`来表示调度执行的任务.  
+由于任务调度池所执行的任务是一种特殊的任务, 任务调度线程池中使用`ScheduledFutureTask`来表示将要调度执行的任务.  
 有如下属性
 1. `time` 任务开始时间、触发时间 
 2. `period` 任务执行周期, 0表示非周期性任务, 正数表示固定频率执行, 负数表示固定延迟执行
@@ -69,26 +69,35 @@ ScheduledFutureTask(Runnable r, V result, long triggerTime,
 ![ScheduledFutureTask](png/ScheduledFutureTask.png)
 
 这里有三种调度任务类型
-1. 延迟任务, 任务延迟一段时间后执行, triggerTime为当前时间+`delay`
-```java
-new ScheduledFutureTask<V>(callable, triggerTime(delay, unit)));
-```
-![delay](png/delay.png)
+1. 延迟任务
+    + 任务延迟一段时间后执行, triggerTime为当前时间+`delay`
+    ```java
+    new ScheduledFutureTask<V>(callable, triggerTime(delay, unit)));
+    ```
+    ![delay](png/delay.png)
 
-2. 固定频率执行, 任务第一次触发时间为当前时间+`initialDelay`, 第二次触发时间为第一次触发时间+`period`
-```java
-new ScheduledFutureTask<Void>(command, null, triggerTime(initialDelay, unit), unit.toNanos(period));
-```
-![fixRate](png/fixRate.png)
-> 之前的错误理解❌: 固定频率执行时, 如果某次任务执行时间较长达到了下次任务的触发时间, 下次任务不会被调度执行(之前错误的认为下次任务会并行执行).
+2. 固定频率执行
+    * 任务第一次触发时间为当前时间+`initialDelay`, 第二次触发时间为第一次触发时间+`period`
+    * 当前任务执行完毕后, 会重置触发时间`time` = `time` + period, 然后将该任务重新放入到延迟任务队列中
+    ```java
+    new ScheduledFutureTask<Void>(command, null, triggerTime(initialDelay, unit), unit.toNanos(period));
+    ```
+    ![fixRate](png/fixRate.png)
+    > 错误理解❌: 固定频率执行时, 如果某次任务执行时间较长达到了下次任务的触发时间, 下次任务会并行执行.  
+    > 在当前任务结束后, 重置触发时间后才会将该任务再次放入到工作队列, 因此对于同一个调度任务来说, 任务是不会并发执行的.
 
-3. 固定延迟执行, 任务第一次触发时间为当前时间+`initialDelay`, 第二次触发时间为第一次任务结束时间+`delay`
-```java
- new ScheduledFutureTask<Void>(command, null, triggerTime(initialDelay, unit), unit.toNanos(-delay));
-```
-![fixDelay](png/fixDelay.png)
+3. 固定延迟执行
+    * 任务第一次触发时间为当前时间+`initialDelay`, 第二次触发时间为第一次任务结束时间+`delay`
+    * 当前任务执行完毕后, 会重置触发时间`time` = `now()` + delay, 然后将该任务重新放入到延迟任务队列中
+    ```java
+    new ScheduledFutureTask<Void>(command, null, triggerTime(initialDelay, unit), unit.toNanos(-delay));
+    ```
+    ![fixDelay](png/fixDelay.png)
 
 ## 延迟任务队列
+通过`schedule()`、`scheduleAtFixRate()`、`scheduleWithFixedDelay()`等操作, 可以提交多种调度任务到线程池, 由于调度任务一般都具有一定的延迟, 后提交的任务可能先被执行(延迟小), 使用普通的FIFO工作队列则无法满足需求.  
+`ScheduledThreadPoolExecutor`则采用了延迟工作队列`DelayWorkQueue`, 它是一个由数组实现的最小堆(任务的触发时间由小到大排序), 队列头部表示的则是触发时间最小的任务.  
+`DelayWorkQueue`有两个重要的操作`shitDown`和`siftUp`, 用于节点更新时(如`take()`, `poll()`, `offer()`), 调整堆的顺序
 
 ## 工作机制
 由于线程池提交的任务都是希望立即执行的(延迟为0), 而任务调度线程池提交的任务一般都不是立即执行, 甚至也有可能后提交的任务被先执行(延迟小). 因此两者的工作线程创建、任务缓存时机会有所不同
