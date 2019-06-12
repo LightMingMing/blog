@@ -73,18 +73,20 @@ ScheduledFutureTask(Runnable r, V result, long triggerTime,
 ```java
 new ScheduledFutureTask<V>(callable, triggerTime(delay, unit)));
 ```
-![delay](png/delay.svg)
+![delay](png/delay.png)
+
 2. 固定频率执行, 任务第一次触发时间为当前时间+`initialDelay`, 第二次触发时间为第一次触发时间+`period`
 ```java
 new ScheduledFutureTask<Void>(command, null, triggerTime(initialDelay, unit), unit.toNanos(period));
 ```
-![fixRate](png/fixRate.svg)
+![fixRate](png/fixRate.png)
 > 之前的错误理解❌: 固定频率执行时, 如果某次任务执行时间较长达到了下次任务的触发时间, 下次任务不会被调度执行(之前错误的认为下次任务会并行执行).
+
 3. 固定延迟执行, 任务第一次触发时间为当前时间+`initialDelay`, 第二次触发时间为第一次任务结束时间+`delay`
 ```java
  new ScheduledFutureTask<Void>(command, null, triggerTime(initialDelay, unit), unit.toNanos(-delay));
 ```
-![fixDelay](png/fixDelay.svg)
+![fixDelay](png/fixDelay.png)
 
 ## 延迟任务队列
 
