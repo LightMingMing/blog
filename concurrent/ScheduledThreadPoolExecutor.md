@@ -302,3 +302,131 @@ public RunnableScheduledFuture<?> take() throws InterruptedException {
 之后工作线程的任务, 则是不断地从队列中获取任务去执行, 和线程池`ThreadPoolExecutor`类似, 不再细说.
 
 ## Spring任务调度
+日常开发中, 我们更多的是直接使用Spring提供的[任务调度](https://docs.spring.io/spring/docs/5.1.8.RELEASE/spring-framework-reference/integration.html#scheduling)方式, 在一个组件的方法上配置`@Scheduled`注解即可.
+```java
+package org.springframework.scheduling.annotation;
+
+@Target({ElementType.METHOD, ElementType.ANNOTATION_TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Repeatable(Schedules.class)
+public @interface Scheduled {
+    
+    String CRON_DISABLED = "-";
+    /**
+	 * A cron-like expression, extending the usual UN*X definition to include triggers
+	 * on the second as well as minute, hour, day of month, month and day of week.
+	 * <p>E.g. {@code "0 * * * * MON-FRI"} means once per minute on weekdays
+     */
+    String cron() default "";
+    String zone() default "";
+    
+    long fixedDelay() default -1;
+    String fixedDelayString() default "";
+    
+    long fixedRate() default -1;
+    String fixedRateString() default "";
+
+    long initialDelay() default -1;
+    String initialDelayString() default "";
+}
+```
+和Java原生调度方式相比, 它多了一个`cron`定时触发的方式, 类似一个闹钟, 需要配置好触发时间"秒 分 时 天 月 星期".
+
+### 实现
+1. `@Scheduled`注解扫描
+`ScheduledAnnotationBeanPostProcessor`会在容器中Bean实例化后, 扫描Bean上带有`@Scheduled`注解的方法
+```java
+
+@Override
+// ScheduledAnnotationBeanPostProcessor.java
+public Object postProcessAfterInitialization(Object bean, String beanName) {
+    // ...
+    Map<Method, Set<Scheduled>> annotatedMethods = MethodIntrospector.selectMethods(targetClass,
+					(MethodIntrospector.MetadataLookup<Set<Scheduled>>) method -> {
+						Set<Scheduled> scheduledMethods = AnnotatedElementUtils.getMergedRepeatableAnnotations(
+								method, Scheduled.class, Schedules.class);
+						return (!scheduledMethods.isEmpty() ? scheduledMethods : null);
+					});
+    // ...
+    annotatedMethods.forEach((method, scheduledMethods) ->
+						scheduledMethods.forEach(scheduled -> processScheduled(scheduled, method, bean)))
+    // ...
+}
+```
+2. `@Scheduled`注解解析, 并将任务注册到`ScheduledTaskRegistrar`
+    1. cron任务
+    ```java
+    this.registrar.scheduleCronTask(new CronTask(runnable, new CronTrigger(cron, timeZone)))
+    ```
+    2. 固定频率任务
+    ```java
+    this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)
+    ```
+    3. 固定延迟任务
+    ```java
+    this.registrar.scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay))
+    ```
+3. `ScheduledTaskRegistar`中将任务提交至`TaskScheduler`去执行
+    ```java
+    // ScheduledTaskRegistar.scheduleCronTask()
+	this.taskScheduler.schedule(task.getRunnable(), task.getTrigger());
+
+    // ScheduledTaskRegistar.scheduleFixedRateTask()
+	this.taskScheduler.scheduleAtFixedRate(task.getRunnable(), startTime, task.getInterval());
+	this.taskScheduler.scheduleAtFixedRate(task.getRunnable(), task.getInterval());
+	
+    // ScheduledTaskRegistar.scheduleWithFixedDelay()
+    this.taskScheduler.scheduleWithFixedDelay(task.getRunnable(), startTime, task.getInterval());
+	this.taskScheduler.scheduleWithFixedDelay(task.getRunnable(), task.getInterval());
+    ```
+4. `TaskScheduler`任务调度执行
+    `TaskScheduler`接口和Java原生`ScheduledExecutorService`调度接口相比, 多了个根据触发器来调度任务的接口, 用于实现`cron`调度
+    ```java
+    // TaskScheduler.java
+    ScheduledFuture<?> schedule(Runnable task, Trigger trigger);
+
+    public interface Trigger {
+       @Nullable
+        Date nextExecutionTime(TriggerContext triggerContext);
+    }
+    ```
+    `TaskScheduler`的一个实现类`ThreadPoolTaskScheduler`, 则是封装了Java的`ScheduledThreadPoolExecutor`接口进行实现的.
+    ```java
+    // ThreadPoolTaskScheduler.java
+    protected ScheduledExecutorService createExecutor(
+		int poolSize, ThreadFactory threadFactory, RejectedExecutionHandler rejectedExecutionHandler) {
+		return new ScheduledThreadPoolExecutor(poolSize, threadFactory, rejectedExecutionHandler);
+	}
+    ```
+    固定频率、固定延迟调度则可直接借助Java API来完成, 而`cron`调度则借助了`ScheduledThreadPoolExecutor`的延迟任务, 每次任务完成, 则根据触发器获取下一任务触发时间, 算出延迟, 向调度任务线程池提交新的任务
+    ```java
+    // ReschedulingRunnable.java
+    @Nullable
+	public ScheduledFuture<?> schedule() {
+		synchronized (this.triggerContextMonitor) {
+			this.scheduledExecutionTime = this.trigger.nextExecutionTime(this.triggerContext);
+			if (this.scheduledExecutionTime == null) {
+				return null;
+			}
+			long initialDelay = this.scheduledExecutionTime.getTime() - System.currentTimeMillis();
+			this.currentFuture = this.executor.schedule(this, initialDelay, TimeUnit.MILLISECONDS);
+			return this;
+		}
+	}
+
+    @Override
+	public void run() {
+		Date actualExecutionTime = new Date();
+		super.run();
+		Date completionTime = new Date();
+		synchronized (this.triggerContextMonitor) {
+			Assert.state(this.scheduledExecutionTime != null, "No scheduled execution");
+			this.triggerContext.update(this.scheduledExecutionTime, actualExecutionTime, completionTime);
+			if (!obtainCurrentFuture().isCancelled()) {
+				schedule(); // 执行
+			}
+		}
+	}
+    ```
+由此看来, Spring任务调度也是在Java任务调度基础上实现的.
