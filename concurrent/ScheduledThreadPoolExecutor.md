@@ -67,7 +67,6 @@ ScheduledFutureTask(Runnable r, V result, long triggerTime,
 ```
 其类图如下
 ![ScheduledFutureTask](png/ScheduledFutureTask.png)
-
 这里有三种调度任务类型
 1. 延迟任务
     + 任务延迟一段时间后执行, triggerTime为当前时间+`delay`
@@ -75,7 +74,6 @@ ScheduledFutureTask(Runnable r, V result, long triggerTime,
     new ScheduledFutureTask<V>(callable, triggerTime(delay, unit)));
     ```
     ![delay](png/delay.png)
-
 2. 固定频率执行
     * 任务第一次触发时间为当前时间+`initialDelay`, 第二次触发时间为第一次触发时间+`period`
     * 当前任务执行完毕后, 会重置触发时间`time` = `time` + period, 然后将该任务重新放入到延迟任务队列中
@@ -85,7 +83,6 @@ ScheduledFutureTask(Runnable r, V result, long triggerTime,
     ![fixRate](png/fixRate.png)
     > 错误理解❌: 固定频率执行时, 如果某次任务执行时间较长达到了下次任务的触发时间, 下次任务会并行执行.  
     > 在当前任务结束后, 重置触发时间后才会将该任务再次放入到工作队列, 因此对于同一个调度任务来说, 任务是不会并发执行的.
-
 3. 固定延迟执行
     * 任务第一次触发时间为当前时间+`initialDelay`, 第二次触发时间为第一次任务结束时间+`delay`
     * 当前任务执行完毕后, 会重置触发时间`time` = `now()` + delay, 然后将该任务重新放入到延迟任务队列中
@@ -116,7 +113,6 @@ private void siftUp(int k, RunnableScheduledFuture<?> key) {
     setIndex(key, k);
 }
 ```
-
 2. `shitDown`将元素`key`放入到数组`k`索引位置, 如果`key`比父节点大, 则向下移动, 直到符合最小堆, 向下移动时, 需要和其两个子节点中小的那个比较
 ```java
 private void siftDown(int k, RunnableScheduledFuture<?> key) {
@@ -193,7 +189,6 @@ public boolean offer(Runnable x) {
     return true;
 }
 ```
-
 ### poll()
 poll()方法, 是一个非阻塞的方法, 如果队列头元素还未到触发时间, 则返回null, 否则将头元素从队列中移除(将最后一个元素放入堆顶, 然后进行下移)
 ```java
@@ -253,53 +248,57 @@ public RunnableScheduledFuture<?> take() throws InterruptedException {
 队列中任务到达触发时间后, 才能从队列中获取出来. 因此必须要有至少一个线程等待时能够自动醒来(不需要`sigle`信号); 如果多个线程限时等待, 由于此时队列中只有一个到达触发时间的任务, 多个线程的话, 会增加线程间的竞争(`await()`或`awaitNaos(delay)`在醒来时, 线程又会重新获取锁(lock)), 这样应该会带来不必要的系统调用, 影响性能(个人猜测, 待我研究AQS...⏰). 而一个限时等待的线程即能满足需求, 又能减少线程间竞争提升性能, 何乐而不为呢?
 
 **什么时候发送`signal`信号?**  
-以下两种场景会发送`signal`信号
 1. 有新任务到来, 并且当前新任务的触发时间, 要比队列中所有任务的触发时间短, 入队后发送`signal`信号  
-**注意**, 这里会把`leader`领导者线程值置为`null`, 因为`signal`信号会唤醒一个(是随机还是有一定顺序? 待定⏰)等待线程, 不一定是领导者线程, 如果唤醒的是非领导线程, 会将其改为领导者线程(发生`take()`循环中)
-```java
-// offer()方法
-if (queue[0] == e) {
-    leader = null;
-    available.signal();
-}
-```
-
-2. 领导者线程线程获取任务成功后, 如果队列中有任务, 则发送`signal`信号, 唤醒一个限时等待的线程, 它将称为新的领导者限时等待.  
-**注意**, 这里还有一个条件`leader==null`, 因为`await()`或者`awaitNanos(nanos)`是可中断的操作, `leader==null`保证只有领导者线程被中断时, 才会发送信号. 这个地方是真的细节
-```java
-// take()方法或poll(long timeout, TimeUnit unit)中
-finally {
-    if (leader == null && queue[0] != null)
+    **注意**, 这里会把`leader`领导者线程值置为`null`, 因为`signal`信号会唤醒一个(是随机还是有一定顺序? 待定⏰)等待线程, 不一定是领导者线程, 如果唤醒的是非领导线程, 会将其改为领导者线程(发生在`take()`方法的循环中)
+    ```java
+    // offer()方法
+    if (queue[0] == e) {
+        leader = null;
         available.signal();
-    lock.unlock();
-}
-``` 
+    }
+    ```
+2. 领导者线程线程获取任务成功后, 如果队列中有任务, 则发送`signal`信号, 唤醒一个限时等待的线程, 它将称为新的领导者限时等待.  
+    **注意**, 这里还有一个条件`leader==null`, 因为`await()`或者`awaitNanos(nanos)`是可中断的操作, `leader==null`保证只有领导者线程被中断时, 才会发送信号. 这个地方是真的细节
+    ```java
+    // take()方法或poll(long timeout, TimeUnit unit)中
+    finally {
+        if (leader == null && queue[0] != null)
+            available.signal();
+        lock.unlock();
+    }
+    ``` 
 ### poll(timeout, unit)
 `poll(timeout, unit)`方法发生允许核心线程超时或者是非核心线程, 限时从队列中获取任务, 其实现和take()比较相似, 不再分析.
 
 ## 工作机制
-由于线程池提交的任务都是希望立即执行的(延迟为0), 而任务调度线程池提交的任务一般都不是立即执行, 甚至也有可能后提交的任务被先执行(延迟小). 因此两者的工作线程创建、任务缓存时机会有所不同
+普通线程池提交的任务都是希望立即执行的(延迟为0), 而任务调度线程池提交的任务是按照触发时间进行堆排序后, 到达任务的触发时间后才会执行. 因此两者的工作线程创建、任务缓存时机会有所不同
 1. `ThreadPoolExecutor`在有新任务时, 如果工作线程大小小于核心线程, 则创建核心线程执行任务; 如果工作线程等于核心线程时并且队列没满, 则将任务缓存到队列中;
-2. `ScheduledThreadPoolExecutor`在有新任务时, 会先将任务存储到**延迟工作队列**中, 之后如果工作线程大小小于核心线程大小, 则创建核心线程, 否则如果工作线程大小等于0(说明**核心线程大小为0**), 则创建非核心线程
+2. `ScheduledThreadPoolExecutor`在有新任务时, 会先将任务按照堆排序存储到**延迟工作队列**中, 之后再按需创建工作线程
+    * 工作线程大小 < 核心线程大小, 则创建核心线程
+    * 工作线程大小等于0(说明**核心线程大小为0**), 则创建非核心线程
+    ```java
+    private void delayedExecute(RunnableScheduledFuture<?> task) {
+        if (isShutdown())
+            reject(task);
+        else {
+            super.getQueue().add(task); // 先将任务入队
+            if (isShutdown() &&
+                !canRunInCurrentRunState(task.isPeriodic()) &&
+                remove(task))
+                task.cancel(false);
+            else
+                ensurePrestart();
+        }
+    }
 
-### 调度任务创建
-```java
-public void execute(Runnable command) {
-    schedule(command, 0, NANOSECONDS);
-}
+    void ensurePrestart() {
+        int wc = workerCountOf(ctl.get());
+        if (wc < corePoolSize)
+            addWorker(null, true); // 核心线程
+        else if (wc == 0)
+            addWorker(null, false); // 非核心线程
+    }
+    ```
+之后工作线程的任务, 则是不断地从队列中获取任务去执行, 和线程池`ThreadPoolExecutor`类似, 不再细说.
 
-public ScheduledFuture<?> schedule(Runnable command,
-                                    long delay,
-                                    TimeUnit unit) {
-    if (command == null || unit == null)
-        throw new NullPointerException();
-    RunnableScheduledFuture<Void> t = decorateTask(command,
-        new ScheduledFutureTask<Void>(command, null,
-                                        triggerTime(delay, unit),
-                                        sequencer.getAndIncrement()));
-    delayedExecute(t);
-    return t;
-}
-```
-
-## Spring任务调度实现
+## Spring任务调度
