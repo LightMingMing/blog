@@ -6,6 +6,11 @@
 * [x] [微服务-服务发布方实现](/ironrhino/remoting-provider.md)  
 * [x] [单点登录](/ironrhino/single-sign-on.md)  
 * [x] [两经纬度间距离公式推导](/ironrhino/distance-formula-of-two-coordinates.md)  
+* [ ] [流量控制](/ironrhino/throttle.md)
+    * 并发量控制 `@Bulkhead`、`@Concurrency`
+    * 频率控制 `@Frequency`、`@RateLimiter`
+    * 断路器 `@CircuitBreaker`
+    * 互斥 `@Mutex`
 
 ## Java并发
 
