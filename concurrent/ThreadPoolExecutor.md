@@ -326,7 +326,7 @@ command指的是提交的任务, 这里有3个过程:
 1. 如果工作线程数量小于核心线程数量, 则调用`addWorker(command, true)`方法创建一个worker线程去处理任务, 参数true表示创建的线程是核心线程. 
 2. 到达这一步, 说明线程池线程大小>=核心线程数. 如果线程是running状态, 并且任务添加至队列成功(队列满了, 则添加失败执行第3步), 这时会重新检查线程状态, 重新检查主要是考虑到在上次检查后发生以下情况
     1. 线程池被shutdown()、shutdownNow(), 这时将该任务从队列中删除, 删除成功后则拒绝, 也有可能删除失败比如执行了shutdownNow()方法导致队列已经为空了
-    2. 当前没有工作线程(上次检查后, 存在worker线程退出), 添加一个firstTask=null的工作线程, 它会从对列中拉取任务并执行
+    2. 当前没有工作线程(上次检查后, 存在worker线程退出), 添加一个firstTask=null的工作线程, 它会从队列中拉取任务并执行
 3. 到达这一步表明任务队列是满的状态, 这时会创建核心线程之外的线程, 如果线程创建失败(达到最大线程数量maximum), 将任务拒绝
 
 ### worker线程
@@ -526,7 +526,7 @@ private Runnable getTask() {
         boolean timed = allowCoreThreadTimeOut || wc > corePoolSize; 
 
         if ((wc > maximumPoolSize || (timed && timedOut))
-            && (wc > 1 || workQueue.isEmpty())) { // 保证工作对列不为空时, 要至少还有一个工作线程
+            && (wc > 1 || workQueue.isEmpty())) { // 保证工作队列不为空时, 要至少还有一个工作线程
             if (compareAndDecrementWorkerCount(c))
                 return null; // 工作线程减1成功, 工作线程退出
             continue; // 工作线程数量已经变化, 从新检验
@@ -558,8 +558,8 @@ getTask()在以下情况时会返回null, 而导致工作线程退出
 
 #### 线程中断退出
 前面已经提到过`shutdown()`和`shutdownNow()`方法时, 都会引起工作的中断
-1. 调用shutdown()方法时, 会将线程状态修改为'shutdown', 并中断空闲线程, 使`take()`和`poll()`因中断而结束阻塞, 并且在getTask()方法的下一层循环中, 确保对列为空时退出 
-2. 调用shutdownNow()方法时, 会将线程状态修改为'stop', 并中断所有工作线程(空闲线程+非空闲线程), 空闲线程因中断结束阻塞后以及工作线程完成当前任务后, 会在getTask()方法中，因当前线程池状态是stop而返回null, 实现线程退出
+1. 调用shutdown()方法时, 会将线程池状态修改为'shutdown', 并中断空闲线程, 使`take()`和`poll()`因中断而结束阻塞, 使得getTask()方法返回为null 
+2. 调用shutdownNow()方法时, 会将线程池状态修改为'stop', 并中断所有工作线程(空闲线程+非空闲线程), 空闲线程因中断结束阻塞后以及工作线程完成当前任务后, 会在getTask()方法中，因当前线程池状态是stop而返回null, 实现线程退出
 ```java
 private Runnable getTask() {
     for(;;) {
