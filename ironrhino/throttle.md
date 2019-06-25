@@ -6,8 +6,8 @@
 
 | 属性 | 说明 | 默认值 |
 | ---- | ---- | ---- |
-| `maxConcurrentCalls` | 最大并发数, `@Bulkhead`标注的方法在任意时刻的并发数量都不会超过该值 | 50 |
-| `maxWaitTime`| 最大等待时间(ms): 并发量达到最大值时, 线程的最大的阻塞时间, 超时后, 会抛`BulkheadFullException`异常 | 0 |
+| maxConcurrentCalls | 最大并发数, @Bulkhead标注的方法在任意时刻的并发数量都不会超过该值 | 50 |
+| maxWaitTime| 最大等待时间(ms): 并发量达到最大值时, 线程的最大的阻塞时间, 超时后, 会抛BulkheadFullException异常 | 0 |
 
 ```java
 import org.ironrhino.core.throttle;
@@ -86,11 +86,11 @@ public class SemaphoreBulkhead implements Bulkhead {
 
 | 属性 | 说明 | 默认值 |
 | ---- | ---- | ---- |
-| `key` | 键值 | |
-| `permits`| 最大并发数 | |
-| `block`| 是否阻塞. `false`, 达到超时时间后, 会抛`IllegalConcurrentAccessException`异常; `true`, 会永久阻塞直到获取许可成功. 这里有点歧义, `false`的阻塞是阻塞一段时间(下面两个属性), `true`是一直阻塞  | `false` |
-| `timeout` | `block`为`false`时, 超时时间 | 0 | 
-| `timeunit` | 时间单位 | `TimeUnit.MILLISECONDS`毫秒 |
+| key | 键值 | |
+| permits | 最大并发数 | |
+| block | 是否阻塞. false达到超时时间后, 会抛IllegalConcurrentAccessException异常; true会永久阻塞直到获取许可成功. 这里有点歧义, false的阻塞是阻塞一段时间(下面两个属性), true是一直阻塞  | false |
+| timeout | block为false时, 超时时间 | 0 | 
+| timeunit | 时间单位 | TimeUnit.MILLISECONDS |
 
 ```java
 import org.ironrhino.core.throttle;
