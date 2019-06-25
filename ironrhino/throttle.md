@@ -17,7 +17,7 @@ public @interface Bulkhead {
 }
 ```
 ### 实现
-借助于`resilience4j`开源节流工具进行实现的
+借助于开源容错框架`resilience4j`进行实现的
 ```java
 package org.ironrhino.core.throttle;
 
@@ -145,8 +145,91 @@ throttleStringRedisTemplate.opsForValue().increment(key, -1);
 ```
 
 ## Frequency频率
+### 使用
+`@Frequency`, 控制一段时间窗口内方法的访问次数, 支持多机
+
+| 属性 | 说明 | 默认值 |
+| ---- | ---- | ---- |
+| key | 键值 | 默认值 |
+| limits | 最大访问次数, 超过该值时将抛FrequencyLimitExceededException | |
+| duration | 时间窗口长度 | 1 |
+| timeUnit | 时间单位 | TimeUnit.HOURS |
+
+```java
+package org.ironrhino.core.throttle;
+
+public @interface Frequency {
+	String key() default "";
+	String limits();
+	int duration() default 1;
+	TimeUnit timeUnit() default TimeUnit.HOURS;
+}
+```
+### 实现
+以每个时间窗口开始时间戳作为`Redis`缓存中key值的一部分, 之后做自增操作, 根据其返回值来判断是否超过最大访问次数
+```java
+// FrequencyAspect.java
+long timestamp = System.currentTimeMillis();
+long duration = frequency.timeUnit().toMillis(frequency.duration());
+String actualKey = key + ":" + (timestamp - timestamp % duration);
+int limits = ExpressionUtils.evalInt(frequency.limits(), context, 0);
+int used = (int) cacheManager.increment(actualKey, 1, frequency.duration(), frequency.timeUnit(), NAMESPACE);
+if (limits >= used) {
+	return jp.proceed();
+} else {
+	throw new FrequencyLimitExceededException(key);
+}
+```
 
 ## RateLimiter频率
+### 使用
+`@RateLimiter` 用于单机访问频度的控制
+
+| 属性 | 说明 | 默认值 |
+| ---- | ---- | ---- |
+| timeoutDuration | 超时时间  | 5000ms |
+| limitRefreshPeriod | 刷新周期 | 500ms |
+| limitForPeriod | 周期内最大访问次数 | 100 |
+
+```java
+public @interface RateLimiter {
+	long timeoutDuration() default 5000; // ms
+	long limitRefreshPeriod() default 500; // ms
+	int limitForPeriod() default 100;
+}
+```
+### 实现
+借助于`resilience4j`实现的, 其实现原理与`@Frequency`类似, 只不过是一个将当前时间窗口并发信息存到了内存中, 令一个是存放到Redis缓存中. 不过由于`RateLimiter`支持超时时间, 在实现上会更加复杂(当前时间窗口的并发量达到最大值时, 之后的访问可以延迟到后面的时间窗口中(如果超时时间够长), 也就是会预先占用后面时间窗口的访问许可)
+
+`resilience4j`将访问信息封装到`state`中, 每次调用`AtomicRateLimiter#getPermission(Duration)}`时, 都会原子更新`state`.
+* `activeCycle` 上次访问时的周期数
+* `activePermissions` 上次访问时剩余的许可数量
+* `nanosToWait` 上一次访问等待时间的纳秒值
+至于其它部分, 这里不在细述, 详见`AtomicRateLimiter`.
+
+```java
+package io.github.resilience4j.ratelimiter.internal;
+public class AtomicRateLimiter implements RateLimiter {
+    // ...
+	private final AtomicReference<State> state;
+	// ...
+	private static class State {
+		private final RateLimiterConfig config;
+
+		private final long activeCycle;
+		private final int activePermissions;
+		private final long nanosToWait;
+
+		private State(RateLimiterConfig config,
+						final long activeCycle, final int activePermissions, final long nanosToWait) {
+			this.config = config;
+			this.activeCycle = activeCycle;
+			this.activePermissions = activePermissions;
+			this.nanosToWait = nanosToWait;
+		}
+	}
+}
+```
 
 ## CircuitBreaker断路器
 
