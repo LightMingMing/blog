@@ -232,5 +232,95 @@ public class AtomicRateLimiter implements RateLimiter {
 ```
 
 ## CircuitBreaker断路器
+### 概述
+断路器在电路领域, 是一种用于保护电路的开关. 在电路异常时, 通过自动断开电路来保护电路中电器.  
+类似的原理，在应用中如果程序频繁出错到达阈值, 那么就会直接抛断路异常, 而不会继续试错, 从而保护应用.  
+断路器有三个状态:
+1. 关闭状态: 应用正常工作
+2. 打开状态: 应用频繁出错到达阈值, 断路器则由关闭状态变为打开状态
+3. 半开状态: 断路器打开一段时间(可配置)后, 自动切换到半开状态
+
+### 使用
+| 属性 | 说明 | 默认值 |
+| ---- | ---- | ---- |
+| failureRateThreshold | 失败频率阈值  | 95 |
+| waitDurationInOpenState | 打开状态等待时间, 由关闭状态自动变为半开状态的时间 | 60s |
+| ringBufferSizeInHalfOpenState | 半开状态的环形缓冲区大小 | 10 |
+| ringBufferSizeInOpenState | 关闭状态的环形缓存区大小 | 100 |
+| include | 记录的异常类型 | |
+| exclude | 不记录的异常类型 | |
+
+**状态变换**  
+close -> open: 关闭状态下, 如果环形缓冲区已满, 并且失败的频率>=95/100, 那么状态会变为打开状态  
+open -> half-open: 打开状态下, 默认60s后状态自动变为half-open状态  
+half-open -> open：半开状态下, 如果半开状态环形缓冲区已满, 失败频率>=95/100, 状态会变为打开状态  
+half-open -> close: 半开状态下, 如果半开状态环形缓冲区已满, 并且失败频率<95/100, 状态会变为关闭状态
+
+```java
+public @interface CircuitBreaker {
+	float failureRateThreshold() default 95;
+	int waitDurationInOpenState() default 60;
+	int ringBufferSizeInHalfOpenState() default 10;
+	int ringBufferSizeInClosedState() default 100;
+	Class<? extends Throwable>[] include();
+	Class<? extends Throwable>[] exclude() default {};
+}
+```
 
 ## Mutex互斥
+### 使用
+`@Mutex`用于防止任务的并发执行. 常用于多个应用实例时的后台调度任务.
+
+| 属性 | 说明 | 默认值 |
+| ---- | ---- | ---- |
+| key | 键值  | |
+| scope | 作用域: 全局、应用级、本地 | Scope.GLOBAL |
+```java
+package org.ironrhino.core.throttle;
+
+public @interface Mutex {
+	String key() default "";
+	Scope scope() default Scope.GLOBAL;
+}
+```
+```java
+package org.ironrhino.core.metadata;
+
+public enum Scope implements Displayable {
+	LOCAL, // only this jvm
+	APPLICATION, // all jvm for this application
+	GLOBAL; // all jvm for all application
+
+	@Override
+	public String toString() {
+		return getDisplayName();
+	}
+}
+```
+### 实现
+借助于`Redis`分布式锁, 获取锁成功则正常执行任务, 获取锁失败则抛`LockFailedException`锁失败异常.
+```java
+// MutexAspect.java
+switch (mutex.scope()) {
+case GLOBAL:
+	break;
+case APPLICATION:
+	sb.append('-').append(AppInfo.getAppName());
+	break;
+case LOCAL:
+	sb.append('-').append(AppInfo.getAppName()).append('-').append(AppInfo.getHostName());
+	break;
+default:
+	break;
+}
+String lockName = sb.toString();
+if (lockService.tryLock(lockName)) {
+	try {
+		return jp.proceed();
+	} finally {
+		lockService.unlock(lockName);
+	}
+} else {
+	throw new LockFailedException(buildKey(jp));
+}
+```
