@@ -45,7 +45,7 @@ public class BulkheadAspect extends BaseAspect {
 	}
 }
 ```
-更深一步, 在`resilience4j`中, `Bulkhead`则是借助Java中`Semaphore`信息进行实现的.  
+更深一步, 在`resilience4j`中, `Bulkhead`则是借助Java中`Semaphore`信号量进行实现的.  
 最大并发数, 也就是`Semaphore`初始化时许可的个数; 方法执行前获取许可, 方执行后释放许可;
 ```java
 package io.github.resilience4j.bulkhead.internal;
