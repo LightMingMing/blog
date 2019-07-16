@@ -166,6 +166,126 @@ private transient volatile Node tail;
 至此, 基础部分介绍的差不多了, 接下来, 我们从以下同步器的实现来对ASQ进行进行深入分析.
 
 ## ReentrantLock
+### Lock接口
+在讲解`ReentrantLock`之前, 先看看`Lock`接口都有哪些方法
+```java
+package java.util.concurrent.locks;
+
+public interface Lock {
+    // 阻塞直至获取锁
+    void lock();
+    // 阻塞直至获取锁或者被中断
+    void lockInterruptibly() throws InterruptedException;
+    // 尝试获取锁, 不会阻塞
+    boolean tryLock();
+    // 限时获取锁, 可被中断
+    boolean tryLock(long time, TimeUnit unit) throws InterruptedException;
+    // 释放锁
+    void unlock();
+    // 创建新条件对象
+    Condition newCondition();
+}
+```
+因此`ReentrantLock`与`Synchronized`相比, 一个明显的优点就是更加灵活, 支持可中断获取锁、非阻塞获取锁、限时获取锁.
+### 公平锁与非公平锁
+`ReentrantLock`默认无参构造函数`new ReentrantLock()`创建的是非公平锁, 也可以使用`new ReentrantLock(boolean fair)`来指明使用公平锁或非公平锁  
+```java
+public ReentrantLock() {
+    sync = new NonfairSync();
+}
+public ReentrantLock(boolean fair) {
+    sync = fair ? new FairSync() : new NonfairSync();
+}
+```
+**公平锁**: 如果当前队列中存在等待线程, 新的获取锁线程会加入到等待队列进行排队
+**非公平锁**: 如果此时锁未被占用(比方刚刚释放), 则新的线程有机会获取锁而不用排队    
+
+两者相比, 非公平锁有着更高的吞吐量, 原因在于, 无论公平锁还是非公平锁在锁释放时, 都会唤醒队列中第一个等待线程, 也就是执行`Lock.unpark(waitThread)`操作, 而此操作开销较大, 耗时较长, 采用非公平锁, 新请求先获取锁, 执行完临界区代码后, 又迅速释放锁(快入快出), 而此时等待节点中线程由刚好唤醒, 获取锁后, 节点从队列中移出. 因此在并发量较大的时候, 非公平锁会有较高的吞吐量.
+
+### lock
+`lock()` 阻塞获取锁: 获取锁成功, 则当前线程继续执行; 获取锁失败, 当前线程加入到等待队列  
+如下是`lock`方法实现, `sync`指的是AQS的实现(公平同步器或非公平同步器). 前面提到过, 前缀为`try`的方法是需要子类实现, 因此`acquire(1)`这个方法是在AQS里实现的.
+```java
+// ReentrantLock.java
+public void lock() {
+    sync.acquire(1); 
+}
+```
+#### acquire
+调用子类`tryAcquire`实现. 可以看出如果返回`true`, 则当前方法执行完毕; 返回`false`, 则会向队列中加入一个`独占`模式的等待节点.
+```java
+// AQS.java
+public final void acquire(int arg) {
+    if (!tryAcquire(arg) &&
+        acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+        selfInterrupt();
+}
+```
+#### tryAcquire
+**公平锁实现**  
+`state`初始值为0, 表示当前许可可被获取.   
+该方法在以下情况时, 会返回`true`(表示获取锁或许可成功)
+1. `state`为0, 并且**队列中没有等待线程**, CAS修改`state`成功后, 设置独占线程, 返回true
+2. `state`不为0, 但当前线程是独占线程, 对`state`进行累计, 并返回true
+```java
+// FairSync.java
+protected final boolean tryAcquire(int acquires) {
+    final Thread current = Thread.currentThread();
+    int c = getState();
+    if (c == 0) {
+        if (!hasQueuedPredecessors() &&
+            compareAndSetState(0, acquires)) {
+            setExclusiveOwnerThread(current);
+            return true;
+        }
+    }
+    else if (current == getExclusiveOwnerThread()) {
+        int nextc = c + acquires;
+        if (nextc < 0)
+            throw new Error("Maximum lock count exceeded");
+        setState(nextc);
+        return true;
+    }
+    return false;
+}
+```
+**非公平锁实现**  
+这里一个很明显的区别就是, 它不会管队列中有没有等待线程. 只要当前锁可被获取, 在CAS修改`state`成功后, 则设置独占线程.
+```java
+// NoFairSync.java
+protected final boolean tryAcquire(int acquires) {
+    return nonfairTryAcquire(acquires);
+}
+
+// Sync.java
+final boolean nonfairTryAcquire(int acquires) {
+    final Thread current = Thread.currentThread();
+    int c = getState();
+    if (c == 0) {
+        if (compareAndSetState(0, acquires)) {
+            setExclusiveOwnerThread(current);
+            return true;
+        }
+    }
+    else if (current == getExclusiveOwnerThread()) {
+        int nextc = c + acquires;
+        if (nextc < 0) // overflow
+            throw new Error("Maximum lock count exceeded");
+        setState(nextc);
+        return true;
+    }
+    return false;
+}
+```
+
+
+### unlock
+
+### tryLock
+
+### lockInterruptibly
+
+### 条件
 
 ## CountDownLatch
 
