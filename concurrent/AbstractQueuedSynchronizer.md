@@ -202,7 +202,7 @@ public ReentrantLock(boolean fair) {
 
 两者相比, 非公平锁有着更高的吞吐量, 原因在于, 无论公平锁还是非公平锁在锁释放时, 都会唤醒队列中第一个等待线程, 也就是执行`Lock.unpark(waitThread)`操作, 而此操作开销较大, 耗时较长, 采用非公平锁, 新请求先获取锁, 执行完临界区代码后, 又迅速释放锁(快入快出), 而此时等待节点中线程由刚好唤醒, 获取锁后, 节点从队列中移出. 因此在并发量较大的时候, 非公平锁会有较高的吞吐量.
 
-### lock相关方法
+### lock方法
 `lock()` 阻塞获取锁: 获取锁成功, 则当前线程继续执行; 获取锁失败, 当前线程加入到等待队列  
 如下是`lock`方法实现, `sync`指的是AQS的实现(公平同步器或非公平同步器). 前面提到过, 前缀为`try`的方法是需要子类实现, 因此`acquire(1)`这个方法是在AQS里实现的.
 ```java
@@ -278,7 +278,7 @@ final boolean nonfairTryAcquire(int acquires) {
 }
 ```
 
-### unlock相关方法
+### unlock方法
 结合lock方法, 大概可以猜测出unlock会执行以下动作:
 1. 独占线程置为null(非重入锁)
 2. 修改状态值`state`
@@ -321,7 +321,7 @@ protected final boolean tryRelease(int releases) {
 }
 ```
 
-### tryLock相关方法
+### tryLock方法
 tryLock方法: 获取锁成功时, 返回true; 获取锁失败时, 返回false, 但是当前线程不会加入等待队列中阻塞;
 这里使用的`nonfaireTryAcquire`[非公平的尝试获取许可方法](#tryAcquire). 因此这里无论公平锁还是非公平锁, `tryLock`都是采用非公平的方式
 ```java
@@ -331,7 +331,7 @@ public boolean tryLock() {
 }
 ```
 
-### lockInterruptibly
+### lockInterruptibly方法
 lockInterruptibly方法能够响应中断, 其实现于`lock()`方法, 比较类似, 区别就是线程被唤醒时, 它会检测线程的中断状态, 如果有中断标记, 会抛`InterruptedException`异常
 ```java
 // AQS.java
