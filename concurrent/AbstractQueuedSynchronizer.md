@@ -202,7 +202,7 @@ public ReentrantLock(boolean fair) {
 
 两者相比, 非公平锁有着更高的吞吐量, 原因在于, 无论公平锁还是非公平锁在锁释放时, 都会唤醒队列中第一个等待线程, 也就是执行`Lock.unpark(waitThread)`操作, 而此操作开销较大, 耗时较长, 采用非公平锁, 新请求先获取锁, 执行完临界区代码后, 又迅速释放锁(快入快出), 而此时等待节点中线程由刚好唤醒, 获取锁后, 节点从队列中移出. 因此在并发量较大的时候, 非公平锁会有较高的吞吐量.
 
-### lock
+### lock相关方法
 `lock()` 阻塞获取锁: 获取锁成功, 则当前线程继续执行; 获取锁失败, 当前线程加入到等待队列  
 如下是`lock`方法实现, `sync`指的是AQS的实现(公平同步器或非公平同步器). 前面提到过, 前缀为`try`的方法是需要子类实现, 因此`acquire(1)`这个方法是在AQS里实现的.
 ```java
@@ -278,14 +278,256 @@ final boolean nonfairTryAcquire(int acquires) {
 }
 ```
 
+### unlock相关方法
+结合lock方法, 大概可以猜测出unlock会执行以下动作:
+1. 独占线程置为null(非重入锁)
+2. 修改状态值`state`
+3. 唤醒头节点后置节点的等待线程(非重入锁)
+```java
+// ReentrantLock.java
+public void unlock() {
+    sync.release(1);
+}
+```
+#### release
+调用子类`tryRelease(arg)`尝试释放许可方法, 如果释放许可成功即返回true, 会调用unparkSuccessor方法, 唤醒头节点后置节点的等待线程.
+```java
+// AQS.java
+public final boolean release(int arg) {
+    if (tryRelease(arg)) {
+        Node h = head;
+        if (h != null && h.waitStatus != 0)
+            unparkSuccessor(h); // 3
+        return true;
+    }
+    return false;
+}
+```
+#### tryRelease
+当前状态值减去要释放的许可数量后为0时, 锁才能释放, 返回true;
+```java
+// Sync.java
+protected final boolean tryRelease(int releases) {
+    int c = getState() - releases;
+    if (Thread.currentThread() != getExclusiveOwnerThread())
+        throw new IllegalMonitorStateException();
+    boolean free = false;
+    if (c == 0) {
+        free = true;
+        setExclusiveOwnerThread(null); // 1
+    }
+    setState(c); // 2
+    return free;
+}
+```
 
-### unlock
-
-### tryLock
+### tryLock相关方法
+tryLock方法: 获取锁成功时, 返回true; 获取锁失败时, 返回false, 但是当前线程不会加入等待队列中阻塞;
+这里使用的`nonfaireTryAcquire`[非公平的尝试获取许可方法](#tryAcquire). 因此这里无论公平锁还是非公平锁, `tryLock`都是采用非公平的方式
+```java
+// ReentrantLock.java
+public boolean tryLock() {
+    return sync.nonfairTryAcquire(1);
+}
+```
 
 ### lockInterruptibly
+lockInterruptibly方法能够响应中断, 其实现于`lock()`方法, 比较类似, 区别就是线程被唤醒时, 它会检测线程的中断状态, 如果有中断标记, 会抛`InterruptedException`异常
+```java
+// AQS.java
+private void doAcquireInterruptibly(int arg)
+    throws InterruptedException {
+    final Node node = addWaiter(Node.EXCLUSIVE);
+    try {
+        for (;;) {
+            final Node p = node.predecessor();
+            if (p == head && tryAcquire(arg)) {
+                setHead(node);
+                p.next = null; // help GC
+                return;
+            }
+            if (shouldParkAfterFailedAcquire(p, node) &&
+                parkAndCheckInterrupt())
+                throw new InterruptedException();
+        }
+    } catch (Throwable t) {
+        cancelAcquire(node);
+        throw t;
+    }
+}
+```
 
 ### 条件
+线程获取锁后, 有时可能需要等待某一资源,也就是条件等待`await()`, 这时它会先释放锁, 然后进入条件等待队列进行等待; 之后另外一个获取锁的线程在临界区内释放该资源后, 则会发送通知`signal()/signalAll()`, 它会将条件等待队列中头节点或所有节点加入到**AQS**的等待队列中, 等待锁的释放.  
+
+如下是`Condition`接口相关方法:
+```java
+public interface Condition {
+    void await() throws InterruptedException; // 条件等待, 可中断
+    void awaitUninterruptibly(); // 不可中断的条件实现
+    long awaitNanos(long nanosTimeout) throws InterruptedException; // 限时条件等待, 线程不会加入条件等待队列
+    boolean await(long time, TimeUnit unit) throws InterruptedException; // 限时等待, 线程不会加入条件等待队列
+    boolean awaitUntil(Date deadline) throws InterruptedException; // 限时等待, 线程不会加入条件等待队列
+    void signal(); // 通知
+    void signalAll(); // 通知
+}
+```
+在AQS的条件队列采用的也是一个双向链式队列
+> 注: 每一个条件对象都会有一个条件队列
+```java
+// AQS.java
+public class ConditionObject implements Condition, java.io.Serializable {
+    /** First node of condition queue. */
+    private transient Node firstWaiter;
+    /** Last node of condition queue. */
+    private transient Node lastWaiter;
+}
+```
+#### addConditionWaiter
+添加条件等待节点, 从这里可知只有独占模式的独占线程才能够进行条件等待
+```java
+// ConditionObject.java
+private Node addConditionWaiter() {
+    if (!isHeldExclusively())
+        throw new IllegalMonitorStateException();
+    Node t = lastWaiter;
+    // If lastWaiter is cancelled, clean out.
+    if (t != null && t.waitStatus != Node.CONDITION) {
+        unlinkCancelledWaiters();
+        t = lastWaiter;
+    }
+
+    Node node = new Node(Node.CONDITION);
+
+    if (t == null)
+        firstWaiter = node;
+    else
+        t.nextWaiter = node;
+    lastWaiter = node;
+    return node;
+}
+```
+#### await方法
+1. 线程加入条件等待队列
+2. 释放锁
+3. 线程阻塞, 等待通知或者被中断, 无论是通知还是被中断, 条件节点都会被转移到AQS的等待队列
+4. 等待获取锁
+```java
+// ConditionObject.java
+public final void await() throws InterruptedException {
+    if (Thread.interrupted())
+        throw new InterruptedException();
+    Node node = addConditionWaiter();
+    int savedState = fullyRelease(node);
+    int interruptMode = 0;
+    while (!isOnSyncQueue(node)) {
+        LockSupport.park(this);
+        if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+            break;
+    }
+    if (acquireQueued(node, savedState) && interruptMode != THROW_IE) 
+        interruptMode = REINTERRUPT;
+    if (node.nextWaiter != null) // clean up if cancelled
+        unlinkCancelledWaiters();
+    if (interruptMode != 0)
+        reportInterruptAfterWait(interruptMode);
+}
+```
+条件等待线程被中断后进入AQS等待队, 之后等线程获取锁后, 重新抛中断异常
+```java
+// ConditionObject.java
+private int checkInterruptWhileWaiting(Node node) {
+    return Thread.interrupted() ?
+        (transferAfterCancelledWait(node) ? THROW_IE : REINTERRUPT) :
+        0;
+}
+
+// AQS.java
+final boolean transferAfterCancelledWait(Node node) {
+    if (node.compareAndSetWaitStatus(Node.CONDITION, 0)) {
+        enq(node);
+        return true;
+    }
+    while (!isOnSyncQueue(node))
+        Thread.yield();
+    return false;
+}
+
+// ConditionObject.java
+private void reportInterruptAfterWait(int interruptMode)
+    throws InterruptedException {
+    if (interruptMode == THROW_IE)
+        throw new InterruptedException();
+    else if (interruptMode == REINTERRUPT)
+        selfInterrupt();
+}
+```
+#### awaitUninterruptibly方法
+不可中断的条件等待实现比较简单  
+1. 线程加入条件等待队列
+2. 释放锁
+3. 等待通知
+4. 等待获取锁
+```java
+// ConditonObject.java
+public final void awaitUninterruptibly() {
+    Node node = addConditionWaiter();
+    int savedState = fullyRelease(node);
+    boolean interrupted = false;
+    while (!isOnSyncQueue(node)) {
+        LockSupport.park(this);
+        if (Thread.interrupted())
+            interrupted = true;
+    }
+    if (acquireQueued(node, savedState) || interrupted)
+        selfInterrupt();
+}
+```
+#### signal方法
+将条件等待队列的头节点转移到等待队列, 并将条件等待线程唤醒
+```java
+// ConditionObject.java
+public final void signal() {
+    if (!isHeldExclusively())
+        throw new IllegalMonitorStateException();
+    Node first = firstWaiter;
+    if (first != null)
+        doSignal(first);
+}
+
+private void doSignal(Node first) {
+    do {
+        if ( (firstWaiter = first.nextWaiter) == null)
+            lastWaiter = null;
+        first.nextWaiter = null;
+    } while (!transferForSignal(first) &&
+                (first = firstWaiter) != null);
+}
+
+final boolean transferForSignal(Node node) {
+    if (!node.compareAndSetWaitStatus(Node.CONDITION, 0))
+        return false;
+    Node p = enq(node);
+    int ws = p.waitStatus;
+    if (ws > 0 || !p.compareAndSetWaitStatus(ws, Node.SIGNAL))
+        LockSupport.unpark(node.thread);
+    return true;
+}
+```
+#### signalAll方法
+signalAll则是将条件等待队列所有节点转移到AQS的锁等待队列中, 并且唤醒条件等待线程
+```java
+//ConditionObject.java
+private void doSignalAll(Node first) {
+    lastWaiter = firstWaiter = null;
+    do {
+        Node next = first.nextWaiter;
+        first.nextWaiter = null;
+        transferForSignal(first);
+        first = next;
+    } while (first != null);
+}
+```
 
 ## CountDownLatch
 
