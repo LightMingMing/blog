@@ -18,8 +18,12 @@
 * [Java任务调度](/concurrent/ScheduledThreadPoolExecutor.md)  
     * 延时执行、周期执行是如何实现的
     * Spring中任务调度是如何实现的
-* [ ] [Java队列同步器](/concurrent/AbstractQueuedSynchronizer.md)  
+* [ ] [Java队列同步器](/concurrent/AbstractQueuedSynchronizer.md)  可重入锁读懂了就差不多了, 后面几个有点不想写了...
     * `ReentranLock`、`ReentrantReadWriteLock`、`CountDownLatch`、`Semaphore`、 `ThreadPoolExecutor`
+
+## 安全
+
+* [ ] [渗透测试](/penetration/penetration_testing.md) 未完待续...
 
 ## 其它
 * [位操作](bit-operation.md) 
