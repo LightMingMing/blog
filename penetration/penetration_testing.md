@@ -148,6 +148,34 @@ Options:
 ### 客户端攻击类
 1. XSS跨站脚本、反射型XSS
 2. 跨站请求伪造CSRF
+    CSRF全称"Cross-Site Request Forgery", 攻击者诱导用户点击某些页面元素, 使受害者在不知情的情况下向Web服务器发送改变自身信息的请求. CSRF攻击可以从站内、站外发起. 站内需要利用网站自身的业务, 比如攻击者的自定义头像是一个修改用户信息的链接, 而站外的话, 用户在A站登录, 在攻击者的B站上, 点击链接, 向A站发送修改信息的请求.
+
+    可利用awvs工具对网站中的CSRF漏洞进行检测
+
+    ![awvs_csrf](png/awvs_csrf.png)
+
+    也可以手动测试, 先编写如下页面
+    ```html
+    <body>
+    <form name="profile" id="profile" method="post" action="http://localhost:8080/user/profile">
+        <input name="user.name" value="青春猪头少年">
+        <input name="user.phone" value="15****371">
+        <button type="submit"></button>
+    </form>
+    <script>
+        window.document.getElementById('profile').submit();
+    </script>
+    </body>
+    ```
+    用户登录后访问该网页对应的链接, 用户信息如果能够修改成功, 则说明存在CSRF漏洞, 如下图所示:
+
+    ![csrf_profile](png/csrf_profile.png)
+
+    修复方式: 
+    1. 请求头加Referer字段, 但无法阻止站内CSRF攻击
+    2. 重要功能加验证码
+    3. token
+
 3. URL重定向、跳转漏洞
 
 ### 信息泄露类
