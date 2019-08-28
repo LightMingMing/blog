@@ -79,7 +79,20 @@ Options:
     -?, --help                 Show Help
 ```
 
-## 攻击类型、攻击原理、检测及修复方式
+### 8. slowHttpTest 慢速Dos攻击测试工具
+[github地址](https://github.com/shekyan/slowhttptest)  
+[安装及其使用说明](https://github.com/shekyan/slowhttptest/wiki/InstallationAndUsage)
+```shell
+简单使用
+./slowhttptest -c 5000 -H -g -i 10 -r 200 -t GET -u ${url}
+-c 连接数量
+-H, B, R or X 攻击模式 slow headers(sloworis), slow message body, range test, slow read
+-g 测试结果输出至csv或html
+-i 数据发送时间间隔, 每个连接
+-r 连接创建频率
+```
+
+## 攻击类型、攻击原理、检测及修 复方式
 
 ### 安全与授权类
 1. 密码明文传输
@@ -209,6 +222,13 @@ Options:
 
 ### 其它
 1. 慢速攻击
+    慢速攻击基于HTTP协议, 通过精心制造特殊请求, 造成服务器延迟, 并且当服务器负载过高时导致拒绝服务. HTTP协议规定, HTTP Request以`\r\n\r\n`为结尾来表示客户端发送结束, 服务端开始处理. 如果很多这样的连接一直不发送`\r\n\r\n`, 则会耗尽服务器的连接资源, 导致服务不可用, 这就是慢速攻击.  
+    
+    可通过slowHttpTest工具进行慢速攻击测试, 如下图, 可以看出当连接数在3000左右的时候, 出现了服务不可用的现象
+    ![slowHttpTest](png/slowHttpTest.png)
+    命令中加上`-g`, 会将结果输出至HTML, 可视化测试结果, 如下
+    ![slowHttp_service_not_avaiable](png/slowHttp_service_not_available.png)
+    
 2. 不安全的HTTP方法
 3. 跨域访问漏洞
 4. DNS域传送漏洞
