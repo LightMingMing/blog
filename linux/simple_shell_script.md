@@ -143,7 +143,43 @@ printf "%-10s %-4s %-4d %-4.2f\n" mingming man 23 75.23456
 printf "%s %s %s\n" a b c d e f g h i j k l m n
 ```
 
-## TODO test 流程 函数...
+## test
+```bash
+# 数值测试
+# -ge -le -gt -lt -eq -ne
+if test $i -gt $j
+then
+    echo "i > j"
+elif test $[i] -lt $[j]
+then
+    echo "i < j"
+else
+    echo "i = j"
+fi
+
+# 字符串测试
+# == != -z(zero) -n(not zoro)
+s1="s1"
+s2="s2"
+if test $s1 == $s2
+then
+    echo "s1 = s2"
+else
+    echo "s1 != s2"
+fi
+
+if test -n $s1; then echo "s1 length != 0"; fi
+
+# 文件判断 与文件测试符一致
+# -e -r -w -x -d -f ...
+if test ! -e $f #文件不存在则创建
+then 
+    `touch $f`
+fi
+`rm $f` # 文件删除
+```
+
+## TODO 流程 函数...
 
 
 ## 参考链接

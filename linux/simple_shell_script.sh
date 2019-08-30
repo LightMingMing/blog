@@ -185,7 +185,52 @@ printf "%-10s %-4s %-4d %-4.2f\n" mingming man 23 75.23456
 printf "%s %s %s\n" a b c d e f g h i j k l m n
 
 echo "[============  TEST  ==============]"
-echo TODO
+if test $i -gt $j
+then
+    echo "i > j"
+elif test $[i] -lt $[j]
+then
+    echo "i < j"
+else
+    echo "i = j"
+fi
+
+s1="s1"
+s2="s2"
+if test $s1 == $s2
+then
+    echo "s1 = s2"
+else
+    echo "s1 != s2"
+fi
+
+if test -n $s1; then echo "s1 length != 0"; fi
+
+if test ! -e $f
+then 
+    `touch $f`
+fi
+
+if test -e $f
+then echo "'$f' is a file."
+fi
+
+if test -r $f
+then echo "'$f' is readable."
+else echo "'$f' isn't readable."
+fi
+
+if test -w $f
+then echo "'$f' is writable."
+else echo "'$f' isn't writable."
+fi
+
+if test -x $f
+then echo "'$f' is executable."
+else echo "'$f' isn't executable."
+fi
+
+`rm $f`
 
 echo "[============  流程控制  ==============]"
 echo TODO
