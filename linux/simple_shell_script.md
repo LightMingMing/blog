@@ -91,7 +91,7 @@ fi
 ```
 ### 字符串运算符
 ```bash
-# = 是否相等  != 是否不相等
+# == 是否相等  != 是否不相等
 # -z 长度是否为0  -n 长度是否不为0
 # $ 是否为空
 ```
@@ -117,8 +117,8 @@ echo -e "escape! \n"
 # \c 不换行
 echo -e "not change"
 
-if [ `UNAME`="DARWIN" ] # UNAME命令判断是否为mac操作系统
-then 
+if [ `uname -s` == "DARWIN" ] # mac操作系统
+then
     echo "escape! \n";
     echo "Don't wrap! \c"; # \c 不换行
 else
