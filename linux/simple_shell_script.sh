@@ -233,7 +233,15 @@ fi
 `rm $f`
 
 echo "[============  流程控制  ==============]"
-echo TODO
-
+# if 
+if [ $i -lt $j ]; then echo "i < j"; elif [ $i -gt $j ]; then echo "i > j"; else echo "i = j"; fi
 # for循环
+# 单行写法
 for each in zhaomingming mingming; do echo "Hello, I'm ${each}"; done;
+
+# 多行写法
+for each in zhaomingming mingming
+do
+    echo "Hello"
+    echo "I am $each"
+done

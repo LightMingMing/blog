@@ -179,7 +179,23 @@ fi
 `rm $f` # 文件删除
 ```
 
-## TODO 流程 函数...
+## TODO 流程控制
+### if
+```bash
+# 单行写法
+# if condition; then command1; command2; fi
+# if condition; then command1; else command2; fi
+# if condition; then command1; elif condition2; then command2; else command3; fi
+if [ $i -lt $j ]; then echo "i < j"; elif [ $i -gt $j ]; then echo "i > j"; else echo "i = j"; fi
+```
+### for
+```bash
+# 单行写法
+# for each in item1 item2 item3; do command1; command2; command3; done
+for each in zhaomingming mingming; do echo "Hello, I'm ${each}"; done;
+```
+
+## TODO 函数...
 
 
 ## 参考链接
