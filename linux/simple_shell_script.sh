@@ -1,6 +1,6 @@
-# !/bin/bash
-# author: zhaomingming
-# shell脚本编程入门
+#!/bin/bash
+#author: zhaomingming
+#shell脚本编程入门
 
 # 变量
 name="ZhaoMingMing"
@@ -244,4 +244,12 @@ for each in zhaomingming mingming
 do
     echo "Hello"
     echo "I am $each"
+done
+
+# while循环
+v=0
+while [ $v -lt 5 ]
+do
+    echo $v
+    (( v++ )) # 或者 let "v++"
 done

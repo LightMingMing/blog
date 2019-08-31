@@ -195,6 +195,17 @@ if [ $i -lt $j ]; then echo "i < j"; elif [ $i -gt $j ]; then echo "i > j"; else
 for each in zhaomingming mingming; do echo "Hello, I'm ${each}"; done;
 ```
 
+### while
+```bash
+# Usage: while condition; do command; done;
+v=0
+while [ $v -lt 5 ]
+do
+    echo $v
+    (( v++ )) # 或者 let "v++"
+done
+```
+
 ## TODO 函数...
 
 
