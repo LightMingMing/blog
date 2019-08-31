@@ -253,3 +253,13 @@ do
     echo $v
     (( v++ )) # 或者 let "v++"
 done
+
+echo "[============== 函数 ===================]"
+s=0
+function sum() {
+    for i in $*
+    do (( s=s+i ))
+    done
+}
+sum 1 2 3 4 5 6
+echo $s

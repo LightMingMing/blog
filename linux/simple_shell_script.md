@@ -206,8 +206,18 @@ do
 done
 ```
 
-## TODO 函数...
-
+## 函数
+```bash
+# Usage: function function_name() { command1; command2;}
+s=0
+function sum() {
+    for i in $*
+    do (( s=s+i ))
+    done
+}
+sum 1 2 3 4 5 6
+echo $s
+```
 
 ## 参考链接
 > [菜鸟shell教程](https://www.runoob.com/linux/linux-shell-echo.html)  
