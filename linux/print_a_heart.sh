@@ -1,6 +1,6 @@
 #!/bin/bash
 #author zhaomingming
-# url: https://www.zhihu.com/question/267069065
+#url: https://www.zhihu.com/question/267069065
 #心形图案❤️ 
 
 # 浮点数除法结果保存至d变量
