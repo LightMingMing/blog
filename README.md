@@ -21,6 +21,7 @@
 
 ## Linux
 * [ ] [Shell脚本编程入门](/linux/simple_shell_script.md)
+* [使用Shell在终端打印心形图案](/linux/print_a_heart.md)
 
 ## 安全
 * [ ] [渗透测试](/penetration/penetration_testing.md) 未完待续...
