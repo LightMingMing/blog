@@ -246,6 +246,13 @@ do
     echo "I am $each"
 done
 
+# 数组遍历
+names=("A" "B" "C" "D" "E" "F" "G")
+for ((i=0;i<${#names[*]};i++))
+do
+    echo "${names[i]}"
+done
+
 # while循环
 v=0
 while [ $v -lt 5 ]
