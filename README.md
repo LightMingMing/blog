@@ -10,12 +10,11 @@
     * 频率控制 `@Frequency`、`@RateLimiter`
     * 断路器 `@CircuitBreaker`
     * 互斥 `@Mutex`
+* [微信公众号登录流程](/ironrhino/wechat-login.md)
 
 ## Java并发
 * [深入学习Java线程池及源码分析](/concurrent/ThreadPoolExecutor.md)  
-* [Java任务调度](/concurrent/ScheduledThreadPoolExecutor.md)  
-    * 延时执行、周期执行是如何实现的
-    * Spring中任务调度是如何实现的
+* [Java任务调度](/concurrent/ScheduledThreadPoolExecutor.md)
 * [ ] [Java队列同步器](/concurrent/AbstractQueuedSynchronizer.md)  
     * `ReentranLock`、`ReentrantReadWriteLock`、`CountDownLatch`、`Semaphore`、 `ThreadPoolExecutor`
 
@@ -25,7 +24,7 @@
 * [CentOS安全加固脚本](/linux/centos_reinforce.sh)
 
 ## 安全
-* [ ] [渗透测试](/penetration/penetration_testing.md) 未完待续...
+* [ ] [渗透测试](/penetration/penetration_testing.md)
 
 ## 其它
 * [位操作](bit-operation.md) 
