@@ -95,9 +95,9 @@ ScheduledFutureTask(Runnable r, V result, long triggerTime,
 通过`schedule()`、`scheduleAtFixRate()`、`scheduleWithFixedDelay()`等操作, 可以提交多种调度任务到线程池, 由于调度任务一般都具有一定的延迟, 后提交的任务可能先被执行(延迟小), 使用普通的FIFO工作队列则无法满足需求.  
 `ScheduledThreadPoolExecutor`则采用了延迟工作队列`DelayWorkQueue`, 它是一个由数组实现的最小堆(任务的触发时间由小到大排序), 队列头部表示的则是触发时间最小的任务.  
 
-### 上移shitUp()和下移shitDown()
-`shitDown()`和`siftUp()`操作是堆结构的两个重要操作, 用于节点更新时(如`take()`, `poll()`, `offer()`), 维持堆的顺序
-1. `shitUp`将元素`key`放入到数组`k`索引位置, 如果`key`比父节点小, 则向上移动, 直到符合最小堆 
+### 上移siftUp()和下移siftDown()
+`siftDown()`和`siftUp()`操作是堆结构的两个重要操作, 用于节点更新时(如`take()`, `poll()`, `offer()`), 维持堆的顺序
+1. `siftUp`将元素`key`放入到数组`k`索引位置, 如果`key`比父节点小, 则向上移动, 直到符合最小堆 
 ```java
 private void siftUp(int k, RunnableScheduledFuture<?> key) {
     while (k > 0) {
@@ -113,7 +113,7 @@ private void siftUp(int k, RunnableScheduledFuture<?> key) {
     setIndex(key, k);
 }
 ```
-2. `shitDown`将元素`key`放入到数组`k`索引位置, 如果`key`比父节点大, 则向下移动, 直到符合最小堆, 向下移动时, 需要和其两个子节点中小的那个比较
+2. `siftDown`将元素`key`放入到数组`k`索引位置, 如果`key`比父节点大, 则向下移动, 直到符合最小堆, 向下移动时, 需要和其两个子节点中小的那个比较
 ```java
 private void siftDown(int k, RunnableScheduledFuture<?> key) {
     int half = size >>> 1;
