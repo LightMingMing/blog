@@ -18,6 +18,12 @@
 * [ ] [Java队列同步器](/concurrent/AbstractQueuedSynchronizer.md)  
     * `ReentranLock`、`ReentrantReadWriteLock`、`CountDownLatch`、`Semaphore`、 `ThreadPoolExecutor`
 
+## Spring
+* [Hibernate Session - 探究一次线上内存溢出的原因](/spring/Hibernate_Session.md)
+
+## MySQL
+* [事务](/MySQL/Transaction.md)
+
 ## Linux
 * [ ] [Shell脚本编程入门](/linux/simple_shell_script.md)
 * [使用Shell在终端打印心形图案](/linux/print_a_heart.md)
