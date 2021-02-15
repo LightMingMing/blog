@@ -531,6 +531,151 @@ private void doSignalAll(Node first) {
 
 ## CountDownLatch
 
+`CountDownLatch` 用于阻塞一个或多个线程直到某些操作完成. 初始化时需要指定等待的操作数`count`, 当`count`大于0时, `await()`方法会阻塞调用线程; 通过调用`countDown()`方法, 可以递减`count`值, 当`count`为0时, 会唤醒所有等待线程, 并且后续`await()`方法会立即返回, 不再阻塞
+
+### countDown方法
+
+```java
+// CountDownLatch.java
+public void countDown() {
+    sync.releaseShared(1);
+}
+
+// AQS.java
+public final boolean releaseShared(int arg) {
+    if (tryReleaseShared(arg)) {
+        doReleaseShared();
+        return true;
+    }
+    return false;
+}
+
+// Sync.java
+protected boolean tryReleaseShared(int releases) {
+    // Decrement count; signal when transition to zero
+    for (;;) {
+        int c = getState();
+        if (c == 0)
+            return false;
+        int nextc = c-1;
+        if (compareAndSetState(c, nextc))
+            return nextc == 0;
+    }
+}
+```
+
+state减为0时, `tryReleaseShared()`返回true, 触发`doReleaseShared()`方法的调用, 唤醒等待队列头结点后继节点指定的线程
+```java
+private void doReleaseShared() {
+    /*
+        * Ensure that a release propagates, even if there are other
+        * in-progress acquires/releases.  This proceeds in the usual
+        * way of trying to unparkSuccessor of head if it needs
+        * signal. But if it does not, status is set to PROPAGATE to
+        * ensure that upon release, propagation continues.
+        * Additionally, we must loop in case a new node is added
+        * while we are doing this. Also, unlike other uses of
+        * unparkSuccessor, we need to know if CAS to reset status
+        * fails, if so rechecking.
+        */
+    for (;;) {
+        Node h = head;
+        if (h != null && h != tail) {
+            int ws = h.waitStatus;
+            if (ws == Node.SIGNAL) {
+                if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0))
+                    continue;            // loop to recheck cases
+                unparkSuccessor(h);
+            }
+            else if (ws == 0 &&
+                        !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
+                continue;                // loop on failed CAS
+        }
+        if (h == head)                   // loop if head changed
+            break;
+    }
+}
+```
+
+### await方法
+count(state)为0时, 立即返回; 大于0, 线程加入等待队列, 并阻塞, 阻塞线程唤醒后, 会向后进行传播, 唤醒下一个节点的线程, 就这样一个接一个的, 唤醒所有的阻塞线程
+```java
+// CountDownLatch.java
+public void await() throws InterruptedException {
+    sync.acquireSharedInterruptibly(1);
+}
+
+// AQS.java
+public final void acquireSharedInterruptibly(int arg)
+        throws InterruptedException {
+    if (Thread.interrupted())
+        throw new InterruptedException();
+    if (tryAcquireShared(arg) < 0)
+        doAcquireSharedInterruptibly(arg);
+}
+
+// Sync.java
+protected int tryAcquireShared(int acquires) {
+    return (getState() == 0) ? 1 : -1;
+}
+
+// AQS.java
+private void doAcquireSharedInterruptibly(int arg)
+    throws InterruptedException {
+    final Node node = addWaiter(Node.SHARED);
+    boolean failed = true;
+    try {
+        for (;;) {
+            final Node p = node.predecessor();
+            if (p == head) {
+                int r = tryAcquireShared(arg);
+                if (r >= 0) {
+                    setHeadAndPropagate(node, r);
+                    p.next = null; // help GC
+                    failed = false;
+                    return;
+                }
+            }
+            if (shouldParkAfterFailedAcquire(p, node) &&
+                parkAndCheckInterrupt())
+                throw new InterruptedException();
+        }
+    } finally {
+        if (failed)
+            cancelAcquire(node);
+    }
+}
+```
+
+```java
+// 重置头节点, 并调用doReleaseShared()方法, 唤醒头节点后继节点指定的线程 (count减为0时, 调用的也是doReleaseShared()方法)
+private void setHeadAndPropagate(Node node, int propagate) {
+    Node h = head; // Record old head for check below
+    setHead(node);
+    /*
+        * Try to signal next queued node if:
+        *   Propagation was indicated by caller,
+        *     or was recorded (as h.waitStatus either before
+        *     or after setHead) by a previous operation
+        *     (note: this uses sign-check of waitStatus because
+        *      PROPAGATE status may transition to SIGNAL.)
+        * and
+        *   The next node is waiting in shared mode,
+        *     or we don't know, because it appears null
+        *
+        * The conservatism in both of these checks may cause
+        * unnecessary wake-ups, but only when there are multiple
+        * racing acquires/releases, so most need signals now or soon
+        * anyway.
+        */
+    if (propagate > 0 || h == null || h.waitStatus < 0 ||
+        (h = head) == null || h.waitStatus < 0) {
+        Node s = node.next;
+        if (s == null || s.isShared())
+            doReleaseShared();
+    }
+}
+```
 ## Semaphore
 
 ## ReentrantReadWriteLock
