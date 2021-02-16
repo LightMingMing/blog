@@ -79,7 +79,9 @@ private transient volatile Node tail;
     }
     ```
 #### 相关方法
+
 > 这里参考的Java 11版本的代码, 和Java 8会有些区别
+
 1. 入队  
     队列初始状态, `head` = `tail` = null, 因此需要对队列进行初始化. 同时入队操作采用CAS修改尾部节点的方式来保证线程安全.
     ```java
@@ -97,7 +99,7 @@ private transient volatile Node tail;
             }
         }
     }
-
+    
     private Node addWaiter(Node mode) {
         Node node = new Node(mode);
 
@@ -115,6 +117,7 @@ private transient volatile Node tail;
         }
     }
     ```
+
 2. CAS修改尾部节点  
     Java11中, 借助于VarHandle(Java 9中引入)实现
     ```java
@@ -162,7 +165,146 @@ private transient volatile Node tail;
     }
     ```
 
-至此, 基础部分介绍的差不多了, 接下来, 我们从以下同步器的实现来对ASQ进行进行深入分析.
+### 核心方法: acquire(int) 与 release(int)
+
+acquire(int)方法, 获取一定数量的许可, 如果获取失败, 则会向队列中, 新增一个**独占模式**的节点, 并阻塞当前线程
+
+```java
+// AQS.java
+public final void acquire(int arg) {
+    if (!tryAcquire(arg) &&
+        acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+        selfInterrupt();
+}
+
+final boolean acquireQueued(final Node node, int arg) {
+    boolean failed = true;
+    try {
+        boolean interrupted = false;
+        for (;;) {
+            final Node p = node.predecessor();
+            if (p == head && tryAcquire(arg)) { // unpark线程后, 尝试获取许可成功, 删除头节点后, 返回
+                setHead(node);
+                p.next = null; // help GC
+                failed = false;
+                return interrupted;
+            }
+            if (shouldParkAfterFailedAcquire(p, node) &&
+                parkAndCheckInterrupt()) // park线程(不参与线程调度)
+                interrupted = true;
+        }
+    } finally {
+        if (failed)
+            cancelAcquire(node);
+    }
+}
+```
+![acquire](png/AQS_acquire.png)
+
+release(int)方法, 尝试释放许可成功后, 则唤醒头节点后继节点的线程
+
+```java
+// AQS.java
+public final boolean release(int arg) {
+    if (tryRelease(arg)) {
+        Node h = head;
+        if (h != null && h.waitStatus != 0)
+            unparkSuccessor(h);
+        return true;
+    }
+    return false;
+}
+```
+
+![release](png/AQS_release.png)
+
+### 核心方法 acquireShared() 与 releaseShared()
+
+acquireShared(int)方法, 获取一定数量的许可, 如果获取失败, 则会向队列中, 新增一个**共享模式**的节点, 并阻塞当前线程
+
+```java
+// AQS.java
+public final void acquireShared(int arg) {
+    if (tryAcquireShared(arg) < 0)
+        doAcquireShared(arg);
+}
+
+private void doAcquireShared(int arg) {
+    final Node node = addWaiter(Node.SHARED);
+    boolean failed = true;
+    try {
+        boolean interrupted = false;
+        for (;;) {
+            final Node p = node.predecessor();
+            if (p == head) {
+                int r = tryAcquireShared(arg);
+                if (r >= 0) {
+                    setHeadAndPropagate(node, r); // unpark线程后, 如果获取许可成功, 删除头节点后, 并唤醒下一节点的线程后(传播), 返回
+                    p.next = null; // help GC
+                    if (interrupted)
+                        selfInterrupt();
+                    failed = false;
+                    return;
+                }
+            }
+            if (shouldParkAfterFailedAcquire(p, node) &&
+                parkAndCheckInterrupt()) // park线程(不参与线程调度)
+                interrupted = true;
+        }
+    } finally {
+        if (failed)
+            cancelAcquire(node);
+    }
+}
+
+private void setHeadAndPropagate(Node node, int propagate) {
+    Node h = head; // Record old head for check below
+    setHead(node);
+
+    if (propagate > 0 || h == null || h.waitStatus < 0 ||
+        (h = head) == null || h.waitStatus < 0) {
+        Node s = node.next;
+        if (s == null || s.isShared())
+            doReleaseShared(); // 唤醒下一节点的线程
+    }
+}
+```
+![acquireShared()](png/AQS_acquireShared.png)
+
+releaseShared(int), 如果尝试释放许可成功, 则唤醒头节点后继节点的线程, 被线程唤醒, 会继续尝试获取许可，如果成功, 会继续唤醒下一节点的线程
+
+```java
+// AQS.java
+public final boolean releaseShared(int arg) {
+    if (tryReleaseShared(arg)) {
+        doReleaseShared();
+        return true;
+    }
+    return false;
+}
+
+private void doReleaseShared() {
+    for (;;) {
+        Node h = head;
+        if (h != null && h != tail) {
+            int ws = h.waitStatus;
+            if (ws == Node.SIGNAL) {
+                if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0))
+                    continue;            // loop to recheck cases
+                unparkSuccessor(h);
+            }
+            else if (ws == 0 &&
+                        !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
+                continue;                // loop on failed CAS
+        }
+        if (h == head)                   // loop if head changed
+            break;
+    }
+}
+```
+![releaseShared](png/AQS_releaseShared.png)
+
+至此, AQS已经介绍的差不多了, 接下来, 我们从以下同步器的实现来对ASQ进行进行深入分析.
 
 ## ReentrantLock
 ### Lock接口
@@ -208,16 +350,6 @@ public ReentrantLock(boolean fair) {
 // ReentrantLock.java
 public void lock() {
     sync.acquire(1); 
-}
-```
-#### acquire
-调用子类`tryAcquire`实现. 可以看出如果返回`true`, 则当前方法执行完毕; 返回`false`, 则会向队列中加入一个`独占`模式的等待节点.
-```java
-// AQS.java
-public final void acquire(int arg) {
-    if (!tryAcquire(arg) &&
-        acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
-        selfInterrupt();
 }
 ```
 #### tryAcquire
@@ -286,20 +418,6 @@ final boolean nonfairTryAcquire(int acquires) {
 // ReentrantLock.java
 public void unlock() {
     sync.release(1);
-}
-```
-#### release
-调用子类`tryRelease(arg)`尝试释放许可方法, 如果释放许可成功即返回true, 会调用unparkSuccessor方法, 唤醒头节点后置节点的等待线程.
-```java
-// AQS.java
-public final boolean release(int arg) {
-    if (tryRelease(arg)) {
-        Node h = head;
-        if (h != null && h.waitStatus != 0)
-            unparkSuccessor(h); // 3
-        return true;
-    }
-    return false;
 }
 ```
 #### tryRelease
@@ -540,15 +658,6 @@ public void countDown() {
     sync.releaseShared(1);
 }
 
-// AQS.java
-public final boolean releaseShared(int arg) {
-    if (tryReleaseShared(arg)) {
-        doReleaseShared();
-        return true;
-    }
-    return false;
-}
-
 // Sync.java
 protected boolean tryReleaseShared(int releases) {
     // Decrement count; signal when transition to zero
@@ -564,38 +673,6 @@ protected boolean tryReleaseShared(int releases) {
 ```
 
 state减为0时, `tryReleaseShared()`返回true, 触发`doReleaseShared()`方法的调用, 唤醒等待队列头结点后继节点指定的线程
-```java
-private void doReleaseShared() {
-    /*
-        * Ensure that a release propagates, even if there are other
-        * in-progress acquires/releases.  This proceeds in the usual
-        * way of trying to unparkSuccessor of head if it needs
-        * signal. But if it does not, status is set to PROPAGATE to
-        * ensure that upon release, propagation continues.
-        * Additionally, we must loop in case a new node is added
-        * while we are doing this. Also, unlike other uses of
-        * unparkSuccessor, we need to know if CAS to reset status
-        * fails, if so rechecking.
-        */
-    for (;;) {
-        Node h = head;
-        if (h != null && h != tail) {
-            int ws = h.waitStatus;
-            if (ws == Node.SIGNAL) {
-                if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0))
-                    continue;            // loop to recheck cases
-                unparkSuccessor(h);
-            }
-            else if (ws == 0 &&
-                        !compareAndSetWaitStatus(h, 0, Node.PROPAGATE))
-                continue;                // loop on failed CAS
-        }
-        if (h == head)                   // loop if head changed
-            break;
-    }
-}
-```
-
 ### await方法
 count(state)为0时, 立即返回; 大于0, 线程加入等待队列, 并阻塞, 阻塞线程唤醒后, 会向后进行传播, 唤醒下一个节点的线程, 就这样一个接一个的, 唤醒所有的阻塞线程
 ```java
@@ -604,77 +681,12 @@ public void await() throws InterruptedException {
     sync.acquireSharedInterruptibly(1);
 }
 
-// AQS.java
-public final void acquireSharedInterruptibly(int arg)
-        throws InterruptedException {
-    if (Thread.interrupted())
-        throw new InterruptedException();
-    if (tryAcquireShared(arg) < 0)
-        doAcquireSharedInterruptibly(arg);
-}
-
 // Sync.java
 protected int tryAcquireShared(int acquires) {
     return (getState() == 0) ? 1 : -1;
 }
-
-// AQS.java
-private void doAcquireSharedInterruptibly(int arg)
-    throws InterruptedException {
-    final Node node = addWaiter(Node.SHARED);
-    boolean failed = true;
-    try {
-        for (;;) {
-            final Node p = node.predecessor();
-            if (p == head) {
-                int r = tryAcquireShared(arg);
-                if (r >= 0) {
-                    setHeadAndPropagate(node, r);
-                    p.next = null; // help GC
-                    failed = false;
-                    return;
-                }
-            }
-            if (shouldParkAfterFailedAcquire(p, node) &&
-                parkAndCheckInterrupt())
-                throw new InterruptedException();
-        }
-    } finally {
-        if (failed)
-            cancelAcquire(node);
-    }
-}
 ```
 
-```java
-// 重置头节点, 并调用doReleaseShared()方法, 唤醒头节点后继节点指定的线程 (count减为0时, 调用的也是doReleaseShared()方法)
-private void setHeadAndPropagate(Node node, int propagate) {
-    Node h = head; // Record old head for check below
-    setHead(node);
-    /*
-        * Try to signal next queued node if:
-        *   Propagation was indicated by caller,
-        *     or was recorded (as h.waitStatus either before
-        *     or after setHead) by a previous operation
-        *     (note: this uses sign-check of waitStatus because
-        *      PROPAGATE status may transition to SIGNAL.)
-        * and
-        *   The next node is waiting in shared mode,
-        *     or we don't know, because it appears null
-        *
-        * The conservatism in both of these checks may cause
-        * unnecessary wake-ups, but only when there are multiple
-        * racing acquires/releases, so most need signals now or soon
-        * anyway.
-        */
-    if (propagate > 0 || h == null || h.waitStatus < 0 ||
-        (h = head) == null || h.waitStatus < 0) {
-        Node s = node.next;
-        if (s == null || s.isShared())
-            doReleaseShared();
-    }
-}
-```
 ## Semaphore
 
 ## ReentrantReadWriteLock
