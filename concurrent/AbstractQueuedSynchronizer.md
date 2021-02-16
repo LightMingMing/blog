@@ -1,5 +1,5 @@
 # Java队列同步器及相关组件
-> 拖的稍微有点久了, 是时候写一下了...
+
 ## Java队列同步器
 ### 概述
 队列同步器指的是`AbstractQueuedSynchronizer`简称`AQS`, 顾名思义, 它是一个以队列的方式来进行多线程同步的基础组件. 在Java中, 它是一个抽象类, 子类可以有选择的实现以下方法, 来定制不同功能的同步器.
@@ -14,8 +14,8 @@ protected boolean isHeldExclusively()
 ![AQS及相关组件](png/aqs_all_synchronizers.png)
 这里我们先介绍`AQS`基本属性和同步队列, 之后再根据其各个组件深入分析.
 ### 基本属性
-1. `exclusiveOwnerThread` 独占模式时的独占线程, 比如`ReentrantLock`以及`ReentrantReadWriteLock`中的`写锁`都是独占模式, 某个同步方法/块在同一时刻最多只能有一个线程能够访问. 
-2. `state` 同步状态, 子类常常根据状态值, 来判断获取许可(`tryAcquire`或`tryAcquiredShared`)是否成功, 以及根据`compareAndSetState`CAS方法修改状态值来释放许可(`tryRelease`或`tryReleaseShared`)
+1. `exclusiveOwnerThread` 独占模式时的独占线程, 比如`ReentrantLock`以及`ReentrantReadWriteLock`中的`写锁`都是独占模式, 用于实现只有独占线程才允许释放锁以及锁重入 
+2. `state` 同步状态, 子类需要实现获取许可方法(`tryAcquire`或`tryAcquiredShared`)、释放许可(`tryRelease`或`tryReleaseShared`)方法, 来对`state`进行修改
 ```java
 private volatile int state;
 
@@ -37,11 +37,11 @@ private transient volatile Node head;
 private transient volatile Node tail;
 ```
 ### 同步队列
-同步队列或者等待队列, 是一种**CLH**锁队列. 在Java AQS中, 它是一个双向队列, 除了头节点外, 每一个节点一般都会有一个等待线程, 并线程的控制信息(状态`status`)持有在节点的前驱节点中. 
+同步队列或者等待队列, 是一种**CLH**锁队列. 在Java AQS中, 它是一个双向队列, 除了头节点外, 每一个节点一般都会有一个等待线程, 而线程的控制信息(状态`status`)持有在节点的**前驱节点**中. 
 > The wait queue is a variant of a "CLH" (Craig, Landin, and Hagersten) lock queue.
 #### 等待节点
 1. 节点类型  
-    独占和共享, 用于表示节点的后置节点等待是一个独占锁还是共享锁. 一般同步器`ReentrantReadWriteLock`都只会采用一种模式除了, 独占模式(实现`tryAcquire`、`tryRelease`方法)或共享模式(实现`tryAcquireShared`、`tryReleaseShared`方法). 而在`ReentrantReadWriteLock`中, 独占节点则对应的是写锁, 共享节点则对应的是读锁.
+    独占和共享, 用于表示节点是在一个独占模式还是共享模式等待. 在`ReentrantReadWriteLock`中, 独占节点则对应的是写锁, 共享节点则对应的是读锁.
     ```java
     static class Node {
         /** Marker to indicate a node is waiting in shared mode */
@@ -60,7 +60,7 @@ private transient volatile Node tail;
     **CANCELLED** 取消状态, 比如说等待线程被中断, 节点状态则会变为取消状态  
     **SIGNAL** 等待通知, 表示节点的后置节点的线程在park状态或不久就会被为park状态  
     **CONDITION** 条件等待, 当前节点在条件等待队列, `ReentrantLock`、`ReentrantReadWriteLock`  
-    **PROPAGATE** 传播, 只有头节点会使用, 下一个`acquireShared`应该无条件传播?? **暂时不管**  
+    **PROPAGATE** 传播, 下一个`acquireShared`应该无条件传播?? **暂时不管**  
     ```java
     static class Node {
         /** waitStatus value to indicate thread has cancelled. */
@@ -81,7 +81,7 @@ private transient volatile Node tail;
 #### 相关方法
 > 这里参考的Java 11版本的代码, 和Java 8会有些区别
 1. 入队  
-    队列初始状态, `head` = `tail` = null, 因此`tail`为`null`, 需要对队列进行初始化. 同时入队操作采用CAS修改尾部节点的方式来保证线程安全.
+    队列初始状态, `head` = `tail` = null, 因此需要对队列进行初始化. 同时入队操作采用CAS修改尾部节点的方式来保证线程安全.
     ```java
     private Node enq(Node node) {
         for (;;) {
@@ -133,8 +133,7 @@ private transient volatile Node tail;
         return TAIL.compareAndSet(this, expect, update);
     }
     ```
-    Java8中, 借助于Unsafe实现, 通过计算出`tail`在`AbstractQueuedSynchronizer`对象中的偏移地址, 通过CAS修改该地址处数据.  
-    我们如果需要原子修改引用对象的话, 1.8版本可以借助于`AtomicReferenceFieldUpdater`来实现, 原理和这里类似. 如果Java版本为1.9以上版本时, 可以参考使用`VarHandle`. 至于性能, **TODO 以后可以做个测试**
+    而在Java8中, 借助于Unsafe实现, 通过计算出`tail`在`AbstractQueuedSynchronizer`对象中的偏移地址, 通过CAS修改该地址处数据.  
     ```java
     // @version 1.8
     private static final Unsafe unsafe = Unsafe.getUnsafe();
