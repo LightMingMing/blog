@@ -25,6 +25,7 @@
 ## Netty
 
 * [Netty概述](/netty/netty.md)
+* [Netty组件](/netty/netty-components.md)
 
 ## Spring
 * [Hibernate Session - 探究一次线上内存溢出的原因](/spring/Hibernate_Session.md)
