@@ -1,6 +1,55 @@
 # SpringBoot  启动过程
 
-[TOC]
+* [一、环境准备](#一、环境准备)
+	* [1.属性源PropertySources](#1.属性源PropertySources)
+		* [1.1系统属性](#1.1系统属性)
+		* [1.2环境变量](#1.2环境变量)
+		* [1.3随机值属性源](#1.3随机值属性源)
+		* [1.4配置数据](#1.4配置数据)
+	* [2.属性处理器](#2.属性处理器)
+* [二、打印横幅](#二、打印横幅)
+	* [1.读取图片/文本横幅](#1.读取图片/文本横幅)
+	* [2.默认横幅](#2.默认横幅)
+* [三、应用上下文-创建](#三、应用上下文-创建)
+* [四、应用上下文-准备](#四、应用上下文-准备)
+	* [1.上下文初始化器初始化](#1.上下文初始化器初始化)
+		* [SharedMetadataReaderFactoryContextInitializer](#SharedMetadataReaderFactoryContextInitializer)
+		* [ContextIdApplicationContextInitializer](#ContextIdApplicationContextInitializer)
+	* [2.创建Bean加载器](#2.创建Bean加载器)
+	* [3.注册注解处理器](#3.注册注解处理器)
+	* [4.主类注册](#4.主类注册)
+* [六、应用上下文-刷新](#六、应用上下文-刷新)
+	* [1.准备](#1.准备)
+	* [2.注册Bean处理器](#2.注册Bean处理器)
+	* [3.Bean注册](#3.Bean注册)
+		* [(1)调用现有的工厂处理器](#(1)调用现有的工厂处理器)
+		* [(2)调用实现PriorityOrdered的Bean注册处理器](#(2)调用实现PriorityOrdered的Bean注册处理器)
+		* [配置类解析](#配置类解析)
+		* [自动装配](#自动装配)
+		* [条件](#条件)
+		* [(3)调用实现Orderd的Bean注册处理器](#(3)调用实现Orderd的Bean注册处理器)
+		* [(4)调用其它注册处理器,直到没有新的Bean注册处理器出现](#(4)调用其它注册处理器,直到没有新的Bean注册处理器出现)
+		* [(5)回调工厂处理器后置处理方法](#(5)回调工厂处理器后置处理方法)
+		* [(6)回调其它工厂处理器后置处理方法](#(6)回调其它工厂处理器后置处理方法)
+	* [4.初始化所有的BeanPostProcessor](#4.初始化所有的BeanPostProcessor)
+	* [5.进行刷新-onRefresh](#5.进行刷新-onRefresh)
+	* [6.初始化所有单例Bean](#6.初始化所有单例Bean)
+* [七、Bean初始化](#七、Bean初始化)
+	* [1.实例化前处理](#1.实例化前处理)
+	* [2.Bean实例化](#2.Bean实例化)
+	* [3.实例化后处理](#3.实例化后处理)
+	* [4.属性设置](#4.属性设置)
+		* [(1)CommonAnnotationBeanPostProcessor](#(1)CommonAnnotationBeanPostProcessor)
+		* [(2)AutowiredAnnotationBeanPostProcessor](#(2)AutowiredAnnotationBeanPostProcessor)
+	* [5.调用Aware方法](#5.调用Aware方法)
+	* [6.初始化前置处理](#6.初始化前置处理)
+		* [(1)ApplicationContextAwareProcessor](#(1)ApplicationContextAwareProcessor)
+		* [(2)WebApplicationContextServletContextAwareProcessor](#(2)WebApplicationContextServletContextAwareProcessor)
+		* [(3)ConfigurationPropertiesBindingPostProcessor](#(3)ConfigurationPropertiesBindingPostProcessor)
+		* [(4)CommonAnnotationBeanPostProcessor](#(4)CommonAnnotationBeanPostProcessor)
+	* [7.初始化方法](#7.初始化方法)
+	* [8.初始化后置处理](#8.初始化后置处理)
+	* [9.Bean生命周期(图片)](#9.Bean生命周期(图片))
 
 ## 一、环境准备
 
@@ -9,11 +58,11 @@
 ConfigurableEnvironment environment = prepareEnvironment(listeners, bootstrapContext, applicationArguments);
 ```
 
-### 1. 属性源 PropertySources
+### 1.属性源PropertySources
 
 ![image-20210319003714432](png/image-20210319003714432.png)
 
-#### 1.1 系统属性
+#### 1.1系统属性
 
 ```java
 // StandardEnvironment.java
@@ -38,7 +87,7 @@ public Map<String, Object> getSystemProperties() {
 }
 ```
 
-#### 1.2 环境变量
+#### 1.2环境变量
 
 ```java
 // AbstractEnvironment.java
@@ -55,7 +104,7 @@ public Map<String, Object> getSystemEnvironment() {
 }
 ```
 
-#### 1.3 随机值属性源
+#### 1.3随机值属性源
 
 ```java
 // RandomValuePropertySourceEnvironmentPostProcessor.java
@@ -67,7 +116,7 @@ public void postProcessEnvironment(ConfigurableEnvironment environment, SpringAp
 
 以`random.`为前缀的属性, 返回随机数. 同时也支持`random.int`返回int类型随机数, `random.long`返回long类型随机数. 
 
-#### 1.4 配置数据
+#### 1.4配置数据
 
 ```java
 // ConfigDataEnvironment.java
@@ -179,13 +228,13 @@ public class YamlPropertySourceLoader implements PropertySourceLoader {
 }
 ```
 
-### 2. 属性处理器
+### 2.属性处理器
 
 ![image-20210318163944924](png/image-20210318163944924.png)
 
 ## 二、打印横幅
 
-### 1. 读取图片/文本横幅
+### 1.读取图片/文本横幅
 
 ```java
 class SpringApplicationBannerPrinter {
@@ -252,7 +301,7 @@ class SpringApplicationBannerPrinter {
 }
 ```
 
-### 2. 默认横幅
+### 2.默认横幅
 
 ```java
 class SpringBootBanner implements Banner {
@@ -296,7 +345,7 @@ public class AnnotationConfigServletWebServerApplicationContext extends ServletW
 
 ## 四、应用上下文-准备
 
-### 1. 上下文初始化器初始化
+### 1.上下文初始化器初始化
 
 ```java
 // SpringApplication.java
@@ -361,7 +410,7 @@ private String getApplicationId(ConfigurableEnvironment environment) {
 }
 ```
 
-### 2. 创建Bean加载器
+### 2.创建Bean加载器
 
 其中`sources`是主类(main class)
 
@@ -397,7 +446,7 @@ private void load(Class<?> source) {
 }
 ```
 
-### 3. 注册注解处理器
+### 3.注册注解处理器
 
 初始化`AnnotatedBeanDefinationReader`时, 会向Bean Factory中注册一些注解处理器 (当前只是将其当作bean注册进来)
 
@@ -419,7 +468,7 @@ RootBeanDefinition def = new RootBeanDefinition(CommonAnnotationBeanPostProcesso
 // 其它...
 ```
 
-### 4. 主类注册
+### 4.主类注册
 
 ```java
 // AnnotatedBeanDefinationReader.java
@@ -465,7 +514,7 @@ public static void registerBeanDefinition(
 
 ## 六、应用上下文-刷新
 
-### 1. 准备
+### 1.准备
 
 ```java
 // AbstractApplicationContext.java
@@ -480,7 +529,7 @@ ConfigurableListableBeanFactory beanFactory = obtainFreshBeanFactory();
 prepareBeanFactory(beanFactory);
 ```
 
-### 2. 注册Bean处理器
+### 2.注册Bean处理器
 
 具体的ApplicationContext实现该方法，向工厂中注册`BeanPostProcessor`
 
@@ -502,7 +551,7 @@ protected void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactor
 }
 ```
 
-### 3. Bean注册
+### 3.Bean注册
 
 ```java
 @FunctionalInterface
@@ -527,13 +576,13 @@ public static void invokeBeanFactoryPostProcessors(
 }
 ```
 
-#### (1) 调用现有的工厂处理器
+#### (1)调用现有的工厂处理器
 
-当前BeanFactory中只有两个工厂后置处理器 , 都是在[上下文初始器初始化](# 1. 上下文初始化器初始化)时，添加到bean工厂的
+当前BeanFactory中只有两个工厂后置处理器 , 都是在[上下文初始器初始化](#1.上下文初始化器初始化)时，添加到bean工厂的
 
 ![image-20210319151812744](png/image-20210319151812744.png)
 
-#### (2) 调用实现PriorityOrdered的Bean注册处理器
+#### (2)调用实现PriorityOrdered的Bean注册处理器
 
 ```java
 // First, invoke the BeanDefinitionRegistryPostProcessors that implement PriorityOrdered.
@@ -738,7 +787,7 @@ spring boot中也提供了如下条件注解
 @ConditionalOnResource
 ```
 
-#### (3) 调用实现Orderd的Bean注册处理器
+#### (3)调用实现Orderd的Bean注册处理器
 
 ```java
 // Next, invoke the BeanDefinitionRegistryPostProcessors that implement Ordered.
@@ -755,7 +804,7 @@ registryProcessors.addAll(currentRegistryProcessors);
 invokeBeanDefinitionRegistryPostProcessors(currentRegistryProcessors, registry, beanFactory.getApplicationStartup());
 ```
 
-#### (4) 调用其它注册处理器, 直到没有新的Bean注册处理器出现
+#### (4)调用其它注册处理器,直到没有新的Bean注册处理器出现
 
 ```java
 while (reiterate) {
@@ -775,7 +824,7 @@ while (reiterate) {
 }
 ```
 
-#### (5) 回调工厂处理器后置处理方法
+#### (5)回调工厂处理器后置处理方法
 
 ```java
 // Now, invoke the postProcessBeanFactory callback of all processors handled so far.
@@ -791,7 +840,7 @@ enhanceConfigurationClasses(beanFactory); // 配置类增强(代理) @Configurat
 beanFactory.addBeanPostProcessor(new ImportAwareBeanPostProcessor(beanFactory));
 ```
 
-#### (6) 回调其它工厂处理器后置处理方法
+#### (6)回调其它工厂处理器后置处理方法
 
 这里的工厂处理器主要是指前面Bean注册环节, 新注册的工厂处理器. 按照 优先、有序、无序的顺序进行回调。
 
@@ -804,7 +853,7 @@ List<String> orderedPostProcessorNames = new ArrayList<>();
 List<String> nonOrderedPostProcessorNames = new ArrayList<>();
 ```
 
-### 4. 初始化所有的BeanPostProcessor
+### 4.初始化所有的BeanPostProcessor
 
 ```java
 // Register bean processors that intercept bean creation.
@@ -834,7 +883,7 @@ registerBeanPostProcessors(beanFactory, nonOrderedPostProcessors);
 registerBeanPostProcessors(beanFactory, internalPostProcessors); 
 ```
 
-### 5. 进行刷新 - onRefresh
+### 5.进行刷新-onRefresh
 
 ```java
 // 实例化单例Bean前, 初始化特殊的Bean
@@ -939,7 +988,7 @@ public interface ServletContextInitializer {
 }
 ```
 
-### 6. 初始化所有单例 Bean
+### 6.初始化所有单例Bean
 
 ```java
 // AbstractApplicationContext.java
@@ -1026,7 +1075,7 @@ protected void addSingleton(String beanName, Object singletonObject) {
 }
 ```
 
-### 1. 实例化前处理
+### 1.实例化前处理
 
 实例化Bean之前，给予`BeanPostProcessor`一个机会返回代理对象， 如果返回的Bean不为空，则不会进行Bean的实例化.
 
@@ -1082,7 +1131,7 @@ public interface InstantiationAwareBeanPostProcessor extends BeanPostProcessor {
 }
 ```
 
-### 2. Bean实例化
+### 2.Bean实例化
 
 ```java
 // AbstractAutowireCapableBeanFactory.java
@@ -1102,7 +1151,7 @@ if (earlySingletonExposure) {
 
 ```
 
-### 3. 实例化后处理
+### 3.实例化后处理
 
 回调InstantiationAwareBeanPostProcessor的postProcessAfterInstantiation() 方法
 
@@ -1119,7 +1168,7 @@ if (!mbd.isSynthetic() && hasInstantiationAwareBeanPostProcessors()) {
 }
 ```
 
-### 4. 属性设置
+### 4.属性设置
 
 回调InstantiationAwareBeanPostProcessor的postProcessProperties() 方法
 
@@ -1150,7 +1199,7 @@ protected void populateBean(String beanName, RootBeanDefinition mbd, @Nullable B
 }
 ```
 
-#### (1) CommonAnnotationBeanPostProcessor
+#### (1)CommonAnnotationBeanPostProcessor
 
 ```java
 @Override
@@ -1167,7 +1216,7 @@ public PropertyValues postProcessProperties(PropertyValues pvs, Object bean, Str
 }
 ```
 
-#### (2) AutowiredAnnotationBeanPostProcessor
+#### (2)AutowiredAnnotationBeanPostProcessor
 
 ```java
 @Override
@@ -1187,7 +1236,7 @@ public PropertyValues postProcessProperties(PropertyValues pvs, Object bean, Str
 }
 ```
 
-### 5. 调用Aware方法
+### 5.调用Aware方法
 
 `BeanName`, `BeanClassLoader`,`BeanFactory` 注入器方法调用
 
@@ -1217,7 +1266,7 @@ private void invokeAwareMethods(String beanName, Object bean) {
 }
 ```
 
-### 6. 初始化前置处理
+### 6.初始化前置处理
 
 ```java
 // AbstractAutowireCapableBeanFactory.java
@@ -1232,7 +1281,7 @@ protected Object initializeBean(String beanName, Object bean, @Nullable RootBean
 
 (忽略第5个, 测试用的)
 
-#### (1) ApplicationContextAwareProcessor
+#### (1)ApplicationContextAwareProcessor
 
 1. EnvironmentAware
 2. EmbeddedValueResolverAware
@@ -1259,7 +1308,7 @@ public Object postProcessBeforeInitialization(Object bean, String beanName) thro
 }
 ```
 
-#### (2) WebApplicationContextServletContextAwareProcessor
+#### (2)WebApplicationContextServletContextAwareProcessor
 
 1. ServletContext
 2. ServletConfig
@@ -1277,7 +1326,7 @@ public Object postProcessBeforeInitialization(Object bean, String beanName) thro
 }
 ```
 
-#### (3) ConfigurationPropertiesBindingPostProcessor
+#### (3)ConfigurationPropertiesBindingPostProcessor
 
 bean和@ConfigurationProperties配置属性绑定 (spring boot)
 
@@ -1289,7 +1338,7 @@ public Object postProcessBeforeInitialization(Object bean, String beanName) thro
 }
 ```
 
-#### (4) CommonAnnotationBeanPostProcessor
+#### (4)CommonAnnotationBeanPostProcessor
 
 ```java
 public class CommonAnnotationBeanPostProcessor extends InitDestroyAnnotationBeanPostProcessor {
@@ -1317,7 +1366,7 @@ public Object postProcessBeforeInitialization(Object bean, String beanName) thro
 }
 ```
 
-### 7. 初始化方法
+### 7.初始化方法
 
 ```java
 // AbstractAutowireCapableBeanFactory.java
@@ -1347,7 +1396,7 @@ protected void invokeInitMethods(String beanName, Object bean, @Nullable RootBea
 }
 ```
 
-### 8. 初始化后置处理
+### 8.初始化后置处理
 
 ```java
 // AbstractAutowireCapableBeanFactory.java
@@ -1358,6 +1407,6 @@ protected Object initializeBean(String beanName, Object bean, @Nullable RootBean
 }
 ```
 
-### 9. Bean生命周期(图片)
+### 9.Bean生命周期(图片)
 
 ![Spring Bean的生命周期](png/BeanLifecycle.png)
