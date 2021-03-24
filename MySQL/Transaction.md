@@ -184,6 +184,8 @@ Empty set (0.00 sec)
 mysql> select * from transaction_test;
 Empty set (0.00 sec)
 
+mysql> savepoint s1;
+
 mysql> update transaction_test set message='幻读' where id = 1;
 Query OK, 0 rows affected (0.00 sec)
 Rows matched: 1  Changed: 0  Warnings: 0
@@ -201,9 +203,29 @@ mysql> select * from transaction_test;
 					# ^C^C -- query aborted
 					# ERROR 1317 (70100): Query execution was interrupted
 
+mysql> rollback to s1;
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> select * from transaction_test;
+Empty set (0.00 sec)
+
 mysql> commit;
 Query OK, 0 rows affected (0.00 sec)
+
+mysql> select * from transaction_test;
++----+--------------+
+| id | message      |
++----+--------------+
+|  1 | 可重复读     |
++----+--------------+
+1 row in set (0.00 sec)
 ```
+
+> RR模式下, InnoDB在事务启动后的第一个读语句会创建一个一致性读试图(MVCC多版本并发控制). 事务创建时, InnoDB事务系统会分配一个按照申请顺序严格递增的事务ID(Transaction ID), 而每行数据也会有多个版本, 数据**更新**时, 会把事务ID赋值给这个数据版本的的事务ID, 计为row trx_id, 并且旧版本也保留.
+
+参考: [极客时间 MySQL实战45讲](https://time.geekbang.org/column/article/70562)
+
+对于A事务来说, B事务是在A事务创建试图后提交的, 不可见. 所有B新增数据在事务A不可见; 之后事务A更新数据, 是在当前最新版本上更新的数据, 更新后, 数据又有了最新的版本(row trx_id=A事务ID), 这个新版本数据在A是可见的 
 
 ### 序列化读
 
