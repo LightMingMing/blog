@@ -63,6 +63,14 @@ SELECT @@SESSION.transaction_read_only;
 🟢还没提交，就读到了  (脏)
 
 ```sql
+-- 建表语句
+create table transaction_test(
+	id int primary key,
+	message varchar(10)
+);
+```
+
+```sql
 mysql> set transaction isolation level read uncommitted;
 Query OK, 0 rows affected (0.00 sec)
 
@@ -156,7 +164,7 @@ mysql> commit;
 Query OK, 0 rows affected (0.00 sec)
 ```
 
-🟢没读到, 但能改 (幻)
+🟢没读到, 但能改 (幻), 改了后, 可以读取到...
 
 ```sql
 mysql> set transaction isolation level REPEATABLE READ;
@@ -170,7 +178,7 @@ Empty set (0.00 sec)
 
 					# -- 另一事务中, 执行如下SQL
 					# > begin;
-					# > insert transaction_test values (1, '幻读');
+					# > insert transaction_test values (1, '可重复读');
 					# > commit;
 
 mysql> select * from transaction_test;
@@ -181,47 +189,11 @@ Query OK, 0 rows affected (0.00 sec)
 Rows matched: 1  Changed: 0  Warnings: 0
 
 mysql> select * from transaction_test;
-Empty set (0.00 sec)
-
-					# -- 另一事务中, 执行如下SQL, 操作挂起！
-					# > delete from transaction_test where id = 1;
-					# ^C^C -- query aborted
-					# ERROR 1317 (70100): Query execution was interrupted
-
-mysql> commit;
-Query OK, 0 rows affected (0.00 sec)
-```
-
-如果改动成功了, 可以读取到...
-
-```sql
-mysql> set transaction isolation level REPEATABLE READ;
-Query OK, 0 rows affected (0.00 sec)
-
-mysql> begin;
-Query OK, 0 rows affected (0.07 sec)
-
-mysql> select * from transaction_test;
-Empty set (0.00 sec)
-
-					# -- 另一事务中, 执行如下SQL
-					# > begin;
-					# > insert transaction_test values (1, '幻读');
-					# > commit;
-
-mysql> select * from transaction_test;
-Empty set (0.00 sec)
-
-mysql> update transaction_test set message='读已提交' where id = 1;
-Query OK, 1 row affected (0.00 sec)
-Rows matched: 1  Changed: 1  Warnings: 0
-
-mysql> select * from transaction_test;
-+------+--------------+
-| id   | message      |
-+------+--------------+
-|    1 | 读已提交     |
-+------+--------------+
++----+---------+
+| id | message |
++----+---------+
+|  1 | 幻读    |
++----+---------+
 1 row in set (0.00 sec)
 
 					# -- 另一事务中, 执行如下SQL, 操作挂起！
