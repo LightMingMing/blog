@@ -267,7 +267,7 @@ public void shutdown() {
 }
 ```
 1. 将线程池运行状态修改为`shutdown`
-2. 中断**空闲**线程, 空闲线程指的是工作队列workQueue为Empty
+2. 中断**空闲**线程, 空闲线程处于阻塞状态, 需要中断让其退出 (如果存在空闲线程, 则说明当前工作队列workQueue为Empty)
 3. 执行onShutdown()钩子方法
 4. 尝试终止, 对线程池状态进行判断, 如果满足terminate条件(无工作线程、队列为空、执行完terminated钩子方法), 则状态修改为terminated
 
@@ -330,7 +330,7 @@ command指的是提交的任务, 这里有3个过程:
 3. 到达这一步表明任务队列是满的状态, 这时会创建核心线程之外的线程, 如果线程创建失败(达到最大线程数量maximum), 将任务拒绝
 
 ### worker线程
-Worker是线程池私有的一个内部类, 继承于`AbstractQueuedSynchronizer`(AQS, 同步器, Java中一些标准同步器都是在它基础上实现的, 如`ReentrantLock`可重入锁、`ReadWriteLock`读写锁, `CountDownLatch`闭锁), worker定制了一些基于`AQS`实现的方法如`lock()`、`tryLock()`、`unlock()`,  来实现[空闲线程中断退出](#被动中断退出)(shutdown()方法中会执行该过程), 保证不中断正在工作线程, 只中断空闲的线程.
+Worker是线程池私有的一个内部类, 继承于`AbstractQueuedSynchronizer`(AQS, 同步器, Java中一些标准同步器都是在它基础上实现的, 如`ReentrantLock`可重入锁、`ReadWriteLock`读写锁, `CountDownLatch`闭锁), worker定制了一些基于`AQS`实现的方法如`lock()`、`tryLock()`、`unlock()`,  来实现[空闲线程中断退出](#被动中断退出)(shutdown()方法中会执行该过程), 保证不中断正在工作线程, 只中断空闲的线程. 工作线程获取到一个任务后, 在任务执行前, 调用`lock()`方法, 预先获取一个许可, 任务完成后, 调用`unlock()`释放许可, 后续中断空闲线程时, 如果`tryLock()`失败, 则说明不是空闲线程, 则不会进行中断. 
 ```java
 private final class Worker
     extends AbstractQueuedSynchronizer
