@@ -79,7 +79,7 @@ int MAX_CHUNK_SIZE = (int) (((long) Integer.MAX_VALUE + 1) / 2); // 2的30次方
 // 默认每个块大小 
 int defaultChunkSize = pageSize << order = 8192 << 11 = 2 << 24; // 16 MB 
 
-// 块的个数, CPU核数的两被, 减少竞争
+// 块的个数, CPU核数的两倍, 减少竞争
 int defaultMinNumArena = NettyRuntime.availableProcessors() * 2;
 
 // (考虑实际运行时, 堆内存, 堆外内存的大小)
