@@ -136,7 +136,67 @@ for (;;) {
 ```
 从上述示例中, 可看出`select` `poll` 和 `epoll`本至的区别, `select`和`poll`**每次执行时**都要将所有的文件描述符传入至内核,  而`epoll`提前将文件描述符, 注册进入epoll示例, 并且epoll_wait方法返回时, 会将可用的事件写入至events中, 而不用对所有的文件描述符进行遍历
 
-`kueue`是BSD的一个系统调用, 内核事件通知机制, 看手册其功能应该和`epoll`类似的
+关于边缘触发(edge-triggered)和水平触发(level-triggered)
+
+```c
+// man 7 epoll
+Suppose that this scenario happens:
+
+1. The file descriptor that represents the read side of a pipe (rfd) is
+    registered on the epoll instance.
+代表管道读取端的文件描述符已经注册在epoll实例上
+
+2. A pipe writer writes 2 kB of data on the write side of the pipe.
+管道写入端写入了2KB的数据
+
+3. A call to epoll_wait(2) is done that will return rfd as a ready file
+    descriptor.
+调用epoll_wait返回就绪文件描述符号
+
+4. The pipe reader reads 1 kB of data from rfd.
+管道写入端读取1KB的数据
+
+5. A call to epoll_wait(2) is done.
+继续调用epoll_wait操作
+
+If the rfd file descriptor has been added to the epoll interface  using
+the  EPOLLET  (edge-triggered)  flag, the call to epoll_wait(2) done in
+step 5 will probably hang despite the available data still  present  in
+the  file  input buffer; meanwhile the remote peer might be expecting a
+response based on the data it already sent.  The  reason  for  this  is
+that edge-triggered mode delivers events only when changes occur on the
+monitored file descriptor.
+
+如果使用边缘触发, 尽管文件输入缓冲区中仍有可用的数据, 第5步的epoll_wait也大概会挂起(hang)
+
+边缘触发模式仅受监视的文件描述符发生变化才会传送事件
+
+An  application  that  employs  the EPOLLET flag should use nonblocking
+file descriptors to avoid having a blocking read or write starve a task
+that  is  handling multiple file descriptors.  The suggested way to use
+epoll as an edge-triggered (EPOLLET) interface is as follows:
+    i   with nonblocking file descriptors; and
+    ii  by waiting for an  event  only  after  read(2)  or  write(2) return EAGAIN.
+
+应用使用边缘触发时, 应使用非阻塞的文件描述符去避免阻塞的读或写导致处理多个文件描述符号的任务饥饿
+使用epoll边缘出发的建议：
+1. 使用非阻塞文件描述符
+2. 仅在read or write返回EAGAIN时等待事件
+
+EAGAIN The file descriptor fd refers to a file other than a socket and has been 
+marked nonblocking (O_NONBLOCK), and the read would block.
+
+文件描述符引用了套接字之外的文件, 并被标记为非阻塞, 读取将会阻塞(不是很理解, 文件描述符号不是socket是文件?)
+
+By  contrast,  when  used  as a level-triggered interface (the default,
+when EPOLLET is not specified), epoll is simply a faster  poll(2),  and
+can be used wherever the latter is used since it shares the same seman‐
+tics.
+
+相比, 水平触发的epol只是一个更快的poll...
+```
+
+`kqueue`是BSD的一个系统调用, 内核事件通知机制, 看手册其功能应该和`epoll`类似的
 
 ```c
 // 创建内核事件队列, 返回kqueu文件描述符
