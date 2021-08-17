@@ -143,7 +143,7 @@ private Advisor namedBeanToAdvisor(Object next) {
 适配规则
 
 1. 是`Advisor`对象, 直接返回
-2. 不是`Advisor`, 也不是`Advice`, 则跑异常
+2. 不是`Advisor`, 也不是`Advice`, 则抛异常
 3. 是`MethodInterceptor`, 则返回`DefaultPointcutAdvisor`对象 (直译: 默认切入点通知对象)
 4. 遍历适配器, 看是否支持, 支持则返回`DefaultPointcutAdvisor`对象
 
