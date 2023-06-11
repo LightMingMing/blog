@@ -45,7 +45,7 @@ workQueue 任务队列. 当线程池中线程大小达到corePoolSize时, 新来
 workQueue是一个阻塞队列, 在线程池中常用的实现有: `LinkedBlockingQueue`、`ArrayBlockingQueue`、`PriorityBlockingQueue`、`SynchronousQueue`.
 
 ### maximunPoolSize
-maimumPoolSize 线程池最大线程数量, 最大活动线程数量, 能同时活动的线程上限. 当工作队列满的时候, 才会创建超出corePoolSize但不会对于maximumPoolSize大小的线程. 如下图所示:
+maimumPoolSize 线程池最大线程数量, 最大活动线程数量, 能同时活动的线程上限. 当工作队列满的时候, 才会创建超出corePoolSize但不会超出maximumPoolSize大小的线程. 如下图所示:
 ![maximunPoolSize](png/tpe_maximumPoolSize.png)
 
 ### keepAliveTime && unit
