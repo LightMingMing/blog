@@ -86,7 +86,7 @@ public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
 }
 ```
 > 如果队列为优先级队列, 则会移除优先级最高的任务, 因此不要将优先级队列和抛弃最旧饱和策略一起使用
-4. CallerRunsPolicy 调用者执行策略, 即线程池不会执行任务, 而是由调用线程(主线程)去执行
+4. CallerRunsPolicy 调用者执行策略, 即线程池不会执行任务, 而是由调用线程去执行
 ```java
 public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
     if (!e.isShutdown()) {
@@ -160,12 +160,14 @@ public static ExecutorService newFixedThreadPool(int nThreads) {
                                   0L, TimeUnit.MILLISECONDS,
                                   new LinkedBlockingQueue<Runnable>());
 ```
-newFixedThreadPool 核心线程数量等于最大线程数量, 最大空闲时间为0, 线程不会空闲退出. `LinkedBlockingQueue`无参构造函数, 默认队列大小为`Integer.MAX_VALUE`, 因此newFixedThreadPool在任务的处理速度小于任务请求的速率, 那么队列中的任务可能会无限制的增加, 降低系统的吞吐量.
+newFixedThreadPool 核心线程数量等于最大线程数量, 最大空闲时间为0, 线程不会空闲退出. `LinkedBlockingQueue`无参构造函数, 默认队列大小为`Integer.MAX_VALUE`, 因此newFixedThreadPool在任务的处理速度小于任务请求的速率, 那么队列中的任务可能会无限制的增加, 极端情况可能会出现OOM.
+
 ```java
 public LinkedBlockingQueue() {
     this(Integer.MAX_VALUE);
 }
 ```
+
 ### newCachedThreadPool 可缓存的线程池
 ```java
 public static ExecutorService newCachedThreadPool() {
