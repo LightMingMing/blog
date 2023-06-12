@@ -304,7 +304,7 @@ private void doReleaseShared() {
 ```
 ![releaseShared](png/AQS_releaseShared.png)
 
-至此, AQS已经介绍的差不多了, 接下来, 我们从以下同步器的实现来对ASQ进行进行深入分析.
+至此, AQS已经介绍的差不多了, 接下来, 我们从以下同步器的实现来对ASQ进行深入分析.
 
 ## ReentrantLock
 ### Lock接口
