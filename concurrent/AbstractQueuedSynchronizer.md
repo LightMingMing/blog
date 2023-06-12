@@ -167,7 +167,7 @@ private transient volatile Node tail;
 
 ### 核心方法: acquire(int) 与 release(int)
 
-acquire(int)方法, 获取一定数量的许可, 如果获取失败, 则会向队列中, 新增一个**独占模式**的节点, 并阻塞当前线程
+acquire(int)方法, 获取一定数量的许可, 如果获取失败, 则会向队列中, 新增一个**独占模式**的节点, 并暂停当前线程(等待锁资源)
 
 ```java
 // AQS.java
