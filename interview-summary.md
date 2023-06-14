@@ -25,7 +25,8 @@
 
 > spring boot 怎么自定义 starter
 
-原理：
+**原理**
+
 @SpringBootAppliction 注解带有 @EnableAutoConfiguration;
 @EnableAutoConfiguration 通过 @Import 会向容器中注册 AutoConfigurationImportSelector, 该类的作用就是从jar包中的 `META-INF/spring.factories` 文件里寻找EnableAutoConfiguration类，并将这些类注册到容器里;
 
@@ -53,7 +54,8 @@ org.mybatis.spring.boot.autoconfigure.MybatisLanguageDriverAutoConfiguration,\
 org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration
 ```
 
-自定义xxx-starter：
+**自定义xxx-starter**
+
 1. xxx-starter 包负责管理依赖, 比如依赖 xxx-autoconfigure 包;
 2. xxx-autoconfigure 包下, 增加 META-INF/spring.factories 文件, 并在该文件下配置 EnableAutoConfiguration 对应的配置类, 配置类实现 starter 相关 bean 的配置(包括xxxProperties.java 指定配置以***开头)
 
@@ -75,6 +77,12 @@ public class MybatisAutoConfiguration implements InitializingBean {
 }
 ```
 
-使用: 
+**使用**
+
 使用方只需要在 pom 文件添加 starter 依赖, 以及在 application.properties 中添加 starter 所需配置即可.
 
+
+> 事务注解什么情况下会失效
+
+1. 非public方法上标注 @Transanctional (`AnnotationTransactionAttributeSource` 默认只会解析public方法上的注解, 要想在非public方法上支持 @Transactional 其实也能实现) 
+2. 被同类中的其它方法调用 (代理有关, 内部调用时的this对象是原始对象, 外部调用是从spring容器中获取到的代理对象)
